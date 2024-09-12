@@ -41,6 +41,14 @@
 	);
 	
 	$theme['config'][] = Array(
+		'title' => '# of most upvoted',
+		'name' => 'limit_upvotes',
+		'type' => 'text',
+		'default' => '10',
+		'comment' => '(maximum upvotes to display)'
+	);
+	
+	$theme['config'][] = Array(
 		'title' => 'HTML file',
 		'name' => 'html',
 		'type' => 'text',

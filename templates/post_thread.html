@@ -6,17 +6,18 @@
 
 {% include 'post/fileinfo.html' %}
 <div class="post op" id="op_{{ post.id }}" {%if post.num_files > 1%}style='clear:both'{%endif%}><p class="intro">
-	<input type="checkbox" class="delete" name="delete_{{ post.id }}" id="delete_{{ post.id }}" />
-	<label for="delete_{{ post.id }}">
+		{% include 'post/flag.html' %}
+		{% include 'post/proxy.html' %}
+		{% include 'post/homer.html' %}
 		{% include 'post/subject.html' %}
 		{% include 'post/name.html' %}
+		{% include 'post/geoloc.html' %}
 		{% include 'post/ip.html' %}
-		{% include 'post/flag.html' %}
 		{% include 'post/time.html' %}
-	</label>
 	{% include 'post/poster_id.html' %}&nbsp;
 	<a class="post_no" id="post_no_{{ post.id }}" onclick="highlightReply({{ post.id }})" href="{% if isnoko50 %}{{ post.link('', '50') }}{% else %}{{ post.link }}{% endif %}">No.</a>
 	<a class="post_no" onclick="citeReply({{ post.id }})" href="{% if isnoko50 %}{{ post.link('q', '50') }}{% else %}{{ post.link('q') }}{% endif %}">{{ post.id }}</a>
+	{% include 'post/post_controls.html' %}
 	{% if post.sticky %}
 		{% if config.font_awesome %}
 			<i class="fa fa-thumb-tack" title="Sticky"></i>
@@ -55,10 +56,9 @@
 		{% set lastcount = config.noko50_count %}
 		<a href="{{ post.root }}{{ board.dir }}{{ config.dir.res }}{{ link_for(post, true) }}">[{% trans %}Last 1 Post{% plural lastcount %}Last {{ count }} Posts{% endtrans %}]</a>
 	{% endif %}
-	{% include 'post/post_controls.html' %}
 	</p>
 	<div class="body">
-		{% endfilter %}{% if index %}{{ post.body|truncate_body(post.link) }}{% else %}{{ post.body }}{% endif %}{% filter remove_whitespace %}
+		{% endfilter %}{% if 'hidebody' in post.email|lower and not mod %}<em><a href="{{ config.root }}user.php">This post can only be viewed with a Bronnen&trade; Brown&trade; account.</a></em>{% elseif index %}{{ post.body|truncate_body(post.link) }}{% else %}{{ post.body }}{% endif %}{% filter remove_whitespace %}
 		{% if post.modifiers['ban message'] %}
 			{{ config.mod.ban_message|sprintf(post.modifiers['ban message']) }}
 		{% endif %}

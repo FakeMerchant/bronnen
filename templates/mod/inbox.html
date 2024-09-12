@@ -16,10 +16,14 @@
 					</a>
 				</td>
 				<td class="minimal">
-					{% if message.username %}
-						<a href="?/new_PM/{{ message.username|e }}">{{ message.username|e }}</a>
-					{% else %}
+					{% if not message.username %}
 						<em>{% trans 'deleted?' %}</em>
+					{% elseif mod|hasPermission(config.mod.see_username) %}
+						<a href="?/new_PM/{{ message.username|e }}">{{ message.username|e }}</a>
+					{% elseif mod.id == message.sender %}
+						<a href="?/users/{{ mod.id }}">{{ mod.username|e }}</a>
+					{% else %}
+						<em>{% trans 'anonymous' %}</em>
 					{% endif %}
 				</td>
 				<td class="minimal">

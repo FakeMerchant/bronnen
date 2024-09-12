@@ -46,8 +46,12 @@ class Twig_Extensions_Extension_Tinyboard extends Twig_Extension
 			new Twig_SimpleFunction('hiddenInputsHash', 'hiddenInputsHash'),
 			new Twig_SimpleFunction('ratio', 'twig_ratio_function'),
 			new Twig_SimpleFunction('secure_link_confirm', 'twig_secure_link_confirm'),
+			new Twig_SimpleFunction('secure_link_fa', 'twig_secure_link_fa'),
 			new Twig_SimpleFunction('secure_link', 'twig_secure_link'),
-			new Twig_SimpleFunction('link_for', 'link_for')
+			new Twig_SimpleFunction('link_for', 'link_for'),
+			new Twig_SimpleFunction('is_it_friday', 'is_it_friday'),
+			new Twig_SimpleFunction('followed', 'followed'),
+			new Twig_SimpleFunction('poster_count', 'poster_count')
 		);
 	}
 	
@@ -130,6 +134,88 @@ function twig_secure_link_confirm($text, $title, $confirm_message, $href) {
 
 	return '<a onclick="if (event.which==2) return true;if (confirm(\'' . htmlentities(addslashes($confirm_message)) . '\')) document.location=\'?/' . htmlspecialchars(addslashes($href . '/' . make_secure_link_token($href))) . '\';return false;" title="' . htmlentities($title) . '" href="?/' . $href . '">' . $text . '</a>';
 }
+function twig_secure_link_fa($fa, $title, $confirm_message, $href) {
+	global $config;
+
+	return '<a class="fa fa-'.$fa.'" onclick="if (event.which==2) return true;if (confirm(\'' . htmlentities(addslashes($confirm_message)) . '\')) document.location=\'?/' . htmlspecialchars(addslashes($href . '/' . make_secure_link_token($href))) . '\';return false;" title="' . htmlentities($title) . '" href="?/' . $href . '"></a>';
+}
 function twig_secure_link($href) {
 	return $href . '/' . make_secure_link_token($href);
+}
+
+function is_it_friday($isoCode, $flag) {
+	if($isoCode == false && $flag == false)
+		return false;
+	if($isoCode == false && strlen($flag) == 2)
+		$isoCode = strtoupper($flag);
+	if($isoCode == false)
+		return false;
+	$num=0;
+	switch ($isoCode) {
+		case 'US':
+			$num=20;
+			break;
+		case 'RU':
+			$num=21;
+			break;
+		case 'AU':
+			$num=12;
+			break;
+		case 'CA':
+			$num=23;
+			break;
+		case 'BR':
+			$num=15;
+			break;
+		case 'MX':
+			$num=7;
+			break;
+		case 'CL':
+			$num=1;
+			break;
+		case 'ES':
+			$num=2;
+			break;
+		case 'PT':
+			$num=2;
+			break;
+		case 'MN':
+			$num=2;
+			break;
+		default:
+			break;
+	}
+	if (isset(DateTimeZone::listIdentifiers(DateTimeZone::PER_COUNTRY,$isoCode)[$num])) {
+		$date = new DateTime("now", new DateTimeZone(DateTimeZone::listIdentifiers(DateTimeZone::PER_COUNTRY,$isoCode)[$num]));
+		return ($date->format('wH') >= 516 && $date->format('wH') <= 605);
+	}
+	return false;
+}
+
+function followed($board, $post) {
+	global $config, $mod;
+	
+	$followedThread = array('board'=>$board,'post'=>$post);
+	if ($config['cache']['enabled'] && ($followedThreads = cache::get('followed_threads_' . $mod['id']))){}
+	else {
+		$query = prepare('SELECT `board`, `post`, `seen`,`title` FROM ``follows`` WHERE `id` = :id');
+		$query->bindValue(':id', $mod['id']);
+		$query->execute() or error(db_error($query));
+		$followedThreads = $query->fetchAll(PDO::FETCH_ASSOC);
+		if ($config['cache']['enabled'] && isset($followedThreads))
+			cache::set('followed_threads_' . $mod['id'], $followedThreads);
+	}
+	if (!isset($followedThreads))
+		return false;
+	else {
+		foreach($followedThreads as &$thread) {
+			if ($thread['board'] == $board && $thread['post'] == $post)
+				return true;
+		}
+		return false;
+	}
+}
+
+function poster_count($board) {
+	return cache::get('poster_count_' . $board);
 }

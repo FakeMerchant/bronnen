@@ -1,0 +1,15 @@
+<form action="?/{{board}}/anonymous_PM/{{ post.id }}" method="post">
+	<input type="hidden" name="token" value="{{ token }}">
+	<table>
+		<tr>
+			<th>To</th>
+				<td><a href="?/{{ board}}/res/{% if post.thread is null %}{{post.id}}{% else %}{{post.thread}}{% endif %}.html#{{post.id}}">&gt;&gt;&gt;/{{ board}}/{{post.id}}</a></td>
+		</tr>
+		<tr>
+			<th>Message</th>
+			<td><textarea name="message" rows="10" cols="40">{{ message }}</textarea></td>
+		</tr>
+	</table>
+
+	<p style="text-align:center"><input accesskey="s" type="submit" value="{% trans 'Send message' %}"></p>
+</form>

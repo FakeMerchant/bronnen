@@ -44,6 +44,7 @@ function setupVideo(thumb, url) {
         if (video == null) {
             video = document.createElement("video");
             video.src = url;
+            if (/\.mp3$/.test(url))  video.poster = url.replace("/src/","/thumb/").replace(".mp3",".png");
             video.loop = loop;
             video.innerText = _("Your browser does not support HTML5 video.");
 
@@ -204,13 +205,15 @@ function setupVideo(thumb, url) {
 function setupVideosIn(element) {
     var thumbs = element.querySelectorAll("a.file");
     for (var i = 0; i < thumbs.length; i++) {
-        if (/\.webm$|\.mp4$/.test(thumbs[i].pathname)) {
-            setupVideo(thumbs[i], thumbs[i].href);
+        if (/\.webm$|\.mp4$|\.mp3$/.test(thumbs[i].pathname)) {
+	    if (/\.webm$|\.mp4$/.test(thumbs[i].pathname)) {
+                setupVideo(thumbs[i], thumbs[i].href);
+	    } else setupVideo(thumbs[i], thumbs[i].pathname);
         } else {
             var m = thumbs[i].search.match(/\bv=([^&]*)/);
             if (m != null) {
                 var url = decodeURIComponent(m[1]);
-                if (/\.webm$|\.mp4$/.test(url)) setupVideo(thumbs[i], url);
+                if (/\.webm$|\.mp4$|\.mp3$$/.test(url)) setupVideo(thumbs[i], url);
             }
         }
     }

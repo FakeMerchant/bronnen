@@ -76,7 +76,7 @@ function generate_salt() {
 function login($username, $password) {
 	global $mod, $config;
 	
-	$query = prepare("SELECT `id`, `type`, `boards`, `password`, `version` FROM ``mods`` WHERE BINARY `username` = :username");
+	$query = prepare("SELECT `id`, `type`, `boards`, `password`, `version` FROM ``mods`` WHERE `username` = :username");
 	$query->bindValue(':username', $username);
 	$query->execute() or error(db_error($query));
 	
@@ -174,6 +174,34 @@ function create_pm_header() {
 	return $header;
 }
 
+function create_notification_header() {
+	global $mod, $config;
+
+	if ($config['cache']['enabled'] && ($header = cache::get('notifications_unread_' . $mod['id'])) != false) {
+		if ($header === true)
+			return false;
+
+		return $header;
+	}
+
+	$query = prepare("SELECT `id` FROM ``notifications`` WHERE `to` = :id AND `unread` = 1");
+	$query->bindValue(':id', $mod['id'], PDO::PARAM_INT);
+	$query->execute() or error(db_error($query));
+
+	if ($pm = $query->fetch(PDO::FETCH_ASSOC))
+		$header = array('id' => $pm['id'], 'waiting' => $query->rowCount() - 1);
+	else
+		$header = true;
+
+	if ($config['cache']['enabled'])
+		cache::set('notifications_unread_' . $mod['id'], $header);
+
+	if ($header === true)
+		return false;
+
+	return $header;
+}
+
 function make_secure_link_token($uri) {
 	global $mod, $config;
 	return substr(sha1($config['cookies']['salt'] . '-' . $uri . '-' . $mod['id']), 0, 8);
@@ -192,7 +220,7 @@ function check_login($prompt = false) {
 			exit;
 		}
 		
-		$query = prepare("SELECT `id`, `type`, `boards`, `password` FROM ``mods`` WHERE `username` = :username");
+		$query = prepare("SELECT `id`, `type`, `boards`, `password`, `created` FROM ``mods`` WHERE `username` = :username");
 		$query->bindValue(':username', $cookie[0]);
 		$query->execute() or error(db_error($query));
 		$user = $query->fetch(PDO::FETCH_ASSOC);
@@ -209,6 +237,7 @@ function check_login($prompt = false) {
 			'id' => $user['id'],
 			'type' => $user['type'],
 			'username' => $cookie[0],
+			'created' => $user['created'],
 			'boards' => explode(',', $user['boards'])
 		);
 	}

@@ -6,9 +6,11 @@
 require_once 'inc/functions.php';
 require_once 'inc/anti-bot.php';
 require_once 'inc/bans.php';
+// require_once 'maxmind/autoload.php';
+// use GeoIp2\Database\Reader;
 
-if ((!isset($_POST['mod']) || !$_POST['mod']) && $config['board_locked']) {
-    error("Board is locked");
+if ((!isset($_POST['mod']) || !$_POST['mod']) && $_POST['board'] == 'arch') {
+    error("This board is for archiving purposes only.");
 }
 
 $dropped_post = false;
@@ -435,7 +437,7 @@ if (isset($_POST['delete'])) {
 	
 	//Check if thread exists
 	if (!$post['op']) {
-		$query = prepare(sprintf("SELECT `sticky`,`locked`,`cycle`,`sage`,`slug` FROM ``posts_%s`` WHERE `id` = :id AND `thread` IS NULL LIMIT 1", $board['uri']));
+		$query = prepare(sprintf("SELECT `subject`,`body_nomarkup`,`sticky`,`locked`,`cycle`,`sage`,`slug`,`user` FROM ``posts_%s`` WHERE `id` = :id AND `thread` IS NULL LIMIT 1", $board['uri']));
 		$query->bindValue(':id', $post['thread'], PDO::PARAM_INT);
 		$query->execute() or error(db_error());
 		
@@ -535,8 +537,8 @@ if (isset($_POST['delete'])) {
 			'size' => filesize($post['file_tmp'])
 		);
 	}
-	
-	$post['name'] = $_POST['name'] != '' ? $_POST['name'] : $config['anonymous'];
+
+	$post['name'] = $_POST['name'];
 	$post['subject'] = $_POST['subject'];
 	$post['email'] = str_replace(' ', '%20', htmlspecialchars($_POST['email']));
 	$post['body'] = $_POST['body'];
@@ -545,7 +547,7 @@ if (isset($_POST['delete'])) {
 	
 	if (!$dropped_post) {
 
-		if (!($post['has_file'] || isset($post['embed'])) || (($post['op'] && $config['force_body_op']) || (!$post['op'] && $config['force_body']))) {
+		if( (!isset($_POST['mod']) || !$_POST['mod'])  && (!($post['has_file'] || isset($post['embed'])) || (($post['op'] && $config['force_body_op']) || (!$post['op'] && $config['force_body'])))) {
 			$stripped_whitespace = preg_replace('/[\s]/u', '', $post['body']);
 			if ($stripped_whitespace == '') {
 				error($config['error']['tooshort_body']);
@@ -688,37 +690,101 @@ if (isset($_POST['delete'])) {
 			error(sprintf($config['error']['toolong'], 'password'));
 	}
 	wordfilters($post['body']);
+	wordfilters($post['subject']);
+	wordfilters($post['name']);
 	
 	$post['body'] = escape_markup_modifiers($post['body']);
 	
 	if ($mod && isset($post['raw']) && $post['raw']) {
 		$post['body'] .= "\n<tinyboard raw html>1</tinyboard>";
 	}
-	
-	if (!$dropped_post)
-	if (($config['country_flags'] && !$config['allow_no_country']) || ($config['country_flags'] && $config['allow_no_country'] && !isset($_POST['no_country']))) {
-		require 'inc/lib/geoip/geoip.inc';
-		$gi=geoip\geoip_open('inc/lib/geoip/GeoIPv6.dat', GEOIP_STANDARD);
-	
-		function ipv4to6($ip) {
-			if (strpos($ip, ':') !== false) {
-				if (strpos($ip, '.') > 0)
-					$ip = substr($ip, strrpos($ip, ':')+1);
-				else return $ip;  //native ipv6
-			}
-			$iparr = array_pad(explode('.', $ip), 4, 0);
-			$part7 = base_convert(($iparr[0] * 256) + $iparr[1], 10, 16);
-			$part8 = base_convert(($iparr[2] * 256) + $iparr[3], 10, 16);
-			return '::ffff:'.$part7.':'.$part8;
+	if (!$dropped_post){
+		$config['ip_whitelist'] = cache::get('whitelist')?cache::get('whitelist'):[];
+		if(cache::get('proxy_protection')){
+			$config['filters'][] = array(
+				'condition' => array(
+					'body' => "/".preg_quote('<tinyboard flag proxy>true</tinyboard>','/')."/"
+				),
+				'action' => 'ban',
+				'add_note' => true,
+				'reason' => 'proxy'
+			);
 		}
-	
-		if ($country_code = geoip\geoip_country_code_by_addr_v6($gi, ipv4to6($_SERVER['REMOTE_ADDR']))) {
-			if (!in_array(strtolower($country_code), array('eu', 'ap', 'o1', 'a1', 'a2')))
-				$post['body'] .= "\n<tinyboard flag>".strtolower($country_code)."</tinyboard>".
-				"\n<tinyboard flag alt>".geoip\geoip_country_name_by_addr_v6($gi, ipv4to6($_SERVER['REMOTE_ADDR']))."</tinyboard>";
+		if(cache::get('force_login'))
+			$config['filters'][] = array(
+				'condition' => array(
+					'custom' => function($post) {
+						global $mod;
+						if (!$post['mod'] || !$mod ) 
+							return true;
+						else
+							return false;
+					}
+				),
+				'action' => 'reject',
+				'message' => &$config['error']['flood']
+			);
+		if (($config['country_flags'] && !$config['allow_no_country']) || ($config['country_flags'] && $config['allow_no_country'] && !isset($_POST['no_country']))) {
+// 			$reader = new Reader('/usr/local/share/GeoIP/GeoLite2-City.mmdb');
+//			$record=$reader->city( $_SERVER['REMOTE_ADDR'] );
+			$geoloc=geolocs($_SERVER['REMOTE_ADDR']);
+			$memenames = ["pmf", "lola", "claire", "jaxon", "roy","elagabalus","csgo","drumpf","lucas bailey","patrik frid\u{e9}n",
+			"pite\u{e5}","anus","brother","t\u{e4}by","cal","joonas","gwen","soya dad","smell","virgin",
+			"chad","orbi","reddit swede","bougie","rick","morty",
+			"staffas","naked wtf","funny cat","autist dog","douglas",
+			"baldcel","gymcel","milcel","incel","chadcel","lumpenprole",
+			"burger flipper","cuck","pepe garrison","cartoon frog",
+			"kekistani","bsr","horse","horsecocker","alcoloser","stablemaster",
+			"modi chaiwala","nippr daemon","chino","akainu","genious","hetnigger",
+			"ntgger","vaginigger","altshiter","sissy","pedofil","kiribati","kirinorway",
+			"norgebosniak","adnan","be\u{15f}ikta\u{15f}","puppy","fat fuck",
+			"schizo","krautchanner","mud\u{17E}ahid","pizza boy","warehouse","bing bing wahoo","hewat","futanari","meat toilet","shemale",
+			"newfag","moralfag","normalfag","summerfag","an\u{f3}nimus","radan",
+			"autistic shoes","kid sucker","kid napper","kid rater","opfer","ostrobothnia",
+			"curitiba","behindert","minimum wage","hussy","paintknight","glaceon","ferenc fart", "erp chatlogs",
+			"albert einstein","4channer","horse rapist","livebunkerer","8channer","amber","futacock","hetloser","spscarter","cohen","magapede",
+			"idiot retard","oblivious hussy","cuckservative","sonichu","lolcow","dogfucker","tree hugger",
+			"tranny","tranny lover","sissy hunter","spook","horsefucker","alex jones","pizza","house burner",
+			"christcuck","zinger","beefer","tribute","bulge noticer","niggersachsen","bougie chad","nerd","anime pro",
+			"bearmode","kermode","lolicon","gamer","gayboy","rex","rex's owner","gaymer","neurotypical","autist","pederast","pleb","tuna swede","lund swede","reddit suede",
+			"einor hugji","bluepilled cuck","steve rambo","sfur aficionado","natsoc gfur","moronic twat","hentai crazed swine",
+			"vagiworshipper","roy orbison","orbimod","hideloc brit","edgemaster","beancuck","leafcuck",
+			"unkel","unkler","hacker","african american","beanchad","leafchad","northern brother",
+			"southern brother","women worshipper","idris elba","women's pussy","hlbk","hideloc american","samir34","tyson mike",
+			"numale","never haver","teemu","hairline","neghole pozzer","hiv carrier","aids boy","bug chaser","thirster","durstig junge",
+			"witzig junge","junge","mammal","reptillian","avian","simian","scaly","diaperfur fetishist","inflation fetishist","tom preston",
+			"pissbottle drinker","spreadsheeter","mod","janitor","telejerker","cam fapper","hotshot","pilotboy","admin","stem masterrace",
+			"gamergater","dungeon master","bateman","white boy","big black cock","bronze gentleman","mongol",
+			"bhenchod","madarchod","staffas sergeant","only 96","faggot gay homo","harald\u{fa}r","bl\u{f6}ndal","fedora atheist","whiny emo faggot",
+			"cbronnenite","kcbitchboi","kcirclejerker","bigdickbitch","house burner","wizard","speedrunner","masturbati" ];
+			$emptycheck=rtrim($post['name']);
+//  			if ((time() >= 1529967600 && time() < 1530054000) && $board['uri'] == 'int' && ($post['op'] == true || $post['thread'] != 2349899)) {
+//  				if ($mod['id'] != 17) {
+//  					$emptycheck = '';
+//  					$post['email'] = empty($post['email']) ? $post['email'] : 'happy%20birthday%20hewat';
+//  					$post['subject'] = empty($post['subject']) ? $post['subject'] : 'HAPPY BIRTHDAY HEWAT';
+//  					if ($post['op']) {
+//  						$post['body'] = hewatify(NULL);
+//  					} else {
+//  						$post['body'] = hewatify($post['thread']);
+//  					}
+//  				}
+//  				if ($mod['id'] == 17 && empty($emptycheck)) {
+//  					$post['name'] = 'the scottish birthday boy';
+//  					$emptycheck = rtrim($post['name']);
+//  				}
+//  			}
+			$post['name'] = !empty($emptycheck) ? $post['name']  : 'the ' . strtolower($geoloc['demonym']) . ' ' . $memenames[mt_rand(0,count($memenames)-1)];
+// 			$location = geolocs($record, $_SERVER['REMOTE_ADDR']);
+			$post['body'] .=	"\n<tinyboard flag>".$geoloc['country_code']."</tinyboard>".
+							"\n<tinyboard flag alt>".$geoloc['country_name']."</tinyboard>".
+							"\n<tinyboard flag isoCode>".$geoloc['isocode']."</tinyboard>".
+							"\n<tinyboard flag city>".$geoloc['city_name']."</tinyboard>".
+							"\n<tinyboard flag state>".$geoloc['region_name']."</tinyboard>".
+							"\n<tinyboard flag proxy>".$geoloc['proxy']."</tinyboard>".
+							"\n<tinyboard flag userAgent>".$_SERVER['HTTP_USER_AGENT']."</tinyboard>";
 		}
 	}
-
 	if ($config['user_flag'] && isset($_POST['user_flag']))
 	if (!empty($_POST['user_flag']) ){
 		
@@ -929,7 +995,7 @@ if (isset($_POST['delete'])) {
 						error(_('Could not strip EXIF metadata!'), null, $error);
 				} else {
 					$image->to($file['file']);
-					$dont_copy_file = true;
+					$file['dont_copy_file'] = true;
 				}
 			}
 			$image->destroy();
@@ -973,7 +1039,7 @@ if (isset($_POST['delete'])) {
 			}
 		}
 		
-		if (!isset($dont_copy_file) || !$dont_copy_file) {
+		if (!isset($file['dont_copy_file']) || !$file['dont_copy_file']) {
 			if (isset($file['file_tmp'])) {
 				if (!@rename($file['tmp_name'], $file['file']))
 					error($config['error']['nomove']);
@@ -1115,8 +1181,17 @@ if (isset($_POST['delete'])) {
 				$pdo->quote($cite[0]) . ', ' . (int)$cite[1] . ')';
 		}
 		query('INSERT INTO ``cites`` VALUES ' . implode(', ', $insert_rows)) or error(db_error());
+		mass_notify($post['tracked_cites'],(!$post['op'] ? $post['thread'] : $id));
 	}
 	
+	if(!$post['op']) {
+		$subjectification = subjectification($thread['body_nomarkup'],$thread['subject']);
+		mass_follower_notify($board['uri'], $post['thread'], $thread['user'], $subjectification);
+		
+		if(!$mod | $thread['user'] != $mod['id'])
+			notify($board['uri'], $post['thread'], 'thread' , $thread['user'], $subjectification);
+	}
+
 	if (!$post['op'] && strtolower($post['email']) != 'sage' && !$thread['sage'] && ($config['reply_limit'] == 0 || $numposts['replies']+1 < $config['reply_limit'])) {
 		bumpThread($post['thread']);
 	}
@@ -1180,9 +1255,12 @@ if (isset($_POST['delete'])) {
 	if ($config['try_smarter'] && $post['op'])
 		$build_pages = range(1, $config['max_pages']);
 	
-	if ($post['op'])
+	if ($post['op']){
 		clean($id);
-	
+		modLog("Created thread #{$id}");
+	}
+	else
+		modLog("Replied to thread #{$post['thread']} with post #{$post['id']}");
 	event('post-after', $post);
 	
 	buildIndex();

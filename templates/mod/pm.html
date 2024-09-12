@@ -2,10 +2,12 @@
 	<table>
 		<tr>
 			<th>{% trans 'From' %}</th>
-			{% if username %}
+			{% if not username %}
+				<td><em>{% trans 'deleted?' %}</em></td>
+			{% elseif mod|hasPermission(config.mod.see_username) %}
 				<td><a href="?/new_PM/{{ username|e }}">{{ username|e }}</a></td>
 			{% else %}
-				<td><em>{% trans 'deleted?' %}</em></td>
+				<td><em>{% trans 'anonymous' %}</em></td>
 			{% endif %}
 		</tr>
 		{% if to != mod.id %}
@@ -33,7 +35,7 @@
 		<li style="padding:5px 0">
 			<input type="submit" name="delete" value="{% trans 'Delete forever' %}">
 		</li>
-		{% if mod|hasPermission(config.mod.create_pm) %}
+		{% if mod|hasPermission(config.mod.reply_pm) and username %}
 			<li style="padding:5px 0">
 				<a href="?/PM/{{ id }}/reply">
 					{% trans 'Reply with quote' %}

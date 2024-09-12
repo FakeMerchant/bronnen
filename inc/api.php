@@ -35,6 +35,7 @@ class Api {
 			'cycle' => 'cyclical',
 			'bump' => 'last_modified',
 			'embed' => 'embed',
+			'upvotes' => 'upvotes'
 		);
 
 		$this->threadsPageFields = array(
@@ -70,7 +71,8 @@ class Api {
 		'images' => 1,
 		'sticky' => 1,
 		'locked' => 1,
-		'last_modified' => 1
+		'last_modified' => 1,
+		'upvotes' => 1
 	);
 
 	private function translateFields($fields, $object, &$apiPost) {

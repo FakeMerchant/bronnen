@@ -1,0 +1,10 @@
+{#
+{% if 'hideloc' in post.email|lower %}
+	<span style="font-style:italic;font-size:9pt;" class="geoloc"></span>
+#}
+{% if post.modifiers['flag city']|length>0 and post.modifiers['flag state']|length>0  %}
+	<span style="font-style:italic;font-size:9pt;" class="geoloc"> {{ post.modifiers['flag city'] | e('html_attr') }}, {{ post.modifiers['flag state'] | e('html_attr') }}</span> 
+{% else %}
+	<span style="font-style:italic;font-size:9pt;" class="geoloc"> {{ post.modifiers['flag city'] | e('html_attr') }}{{ post.modifiers['flag state'] | e('html_attr') }}</span>
+{% endif %}
+

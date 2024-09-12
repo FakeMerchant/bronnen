@@ -18,6 +18,10 @@ $query = isset($_SERVER['QUERY_STRING']) ? rawurldecode($_SERVER['QUERY_STRING']
 
 $pages = array(
 	''					=> ':?/',			// redirect to dashboard
+	'/int'				=> ':?/int/',			// redirect to proper board
+	'/arch'			=> ':?/arch/',			// redirect to proper board
+	'/meta'			=> ':?/meta/',			// redirect to proper board
+	'/test'			=> ':?/test/',			// redirect to proper board
 	'/'					=> 'dashboard',			// dashboard
 	'/confirm/(.+)'				=> 'confirm',			// confirm action (if javascript didn't work)
 	'/logout'				=> 'secure logout',		// logout
@@ -25,12 +29,18 @@ $pages = array(
 	'/users'				=> 'users',			// manage users
 	'/users/(\d+)/(promote|demote)'		=> 'secure user_promote',	// prmote/demote user
 	'/users/(\d+)'				=> 'secure_POST user',		// edit user
+	'/statistics'				=> 'statistics',		// poster statistics
+	'/statistics/(\d+)'				=> 'statistics',		// poster statistics
 	'/users/new'				=> 'secure_POST user_new',	// create a new user
 	
 	'/new_PM/([^/]+)'			=> 'secure_POST new_pm',	// create a new pm
 	'/PM/(\d+)(/reply)?'			=> 'pm',			// read a pm
 	'/inbox'				=> 'inbox',			// pm inbox
-	
+	'/notification/(\d+)'			=> 'notification',			// read a notification
+	'/notifications'				=> 'notifications',			// notification inbox
+	'/dismiss_all'				=> 'dismiss_all',			// notification inbox
+	'/outbox'				=> 'outbox',			// pm outbox
+
 	'/log'					=> 'log',			// modlog
 	'/log/(\d+)'				=> 'log',			// modlog
 	'/log:([^/:]+)'				=> 'user_log',			// modlog
@@ -55,6 +65,7 @@ $pages = array(
 	'/new-board'				=> 'secure_POST new_board',	// create a new board
 	
 	'/rebuild'				=> 'secure_POST rebuild',	// rebuild static files
+	'/proxy'				=> 'secure_POST proxy',	// rebuild static files
 	'/reports'				=> 'reports',			// report queue
 	'/reports/(\d+)/dismiss(all)?'		=> 'secure report_dismiss',	// dismiss a report
 	
@@ -67,6 +78,9 @@ $pages = array(
 	'/ban-appeals'				=> 'secure_POST ban_appeals',	// view ban appeals
 	
 	'/recent/(\d+)'				=> 'recent_posts',		// view recent posts
+	'/my_threads'				=> 'my_threads',		// view my threads
+	'/replied_threads'				=> 'replied_threads',		// view replied threads
+	'/followed_threads'				=> 'followed_threads',		// view followed threads
 
 	'/search'				=> 'search_redirect',		// search
 	'/search/(posts|IP_notes|bans|log)/(.+)/(\d+)'	=> 'search',		// search
@@ -76,13 +90,22 @@ $pages = array(
 	'/(\%b)/move/(\d+)'			=> 'secure_POST move',		// move thread
 	'/(\%b)/move_reply/(\d+)'			=> 'secure_POST move_reply',		// move reply
 	'/(\%b)/edit(_raw)?/(\d+)'		=> 'secure_POST edit_post',	// edit post
+	'/(\%b)/edit_own?/(\d+)'		=> 'secure_POST edit_own',	// edit own post
 	'/(\%b)/delete/(\d+)'			=> 'secure delete',		// delete post
 	'/(\%b)/deletefile/(\d+)/(\d+)'		=> 'secure deletefile',		// delete file from post
 	'/(\%b+)/spoiler/(\d+)/(\d+)'			=> 'secure spoiler_image',	// spoiler file
+	'/(\%b)/delete_own/(\d+)'			=> 'secure delete_own',		// delete own post
+	'/(\%b)/deletefile_own/(\d+)/(\d+)'		=> 'secure deletefile_own',		// delete own file from post
+	'/(\%b+)/spoiler_own/(\d+)/(\d+)'			=> 'secure spoiler_image_own',	// spoiler own file
+	'/(\%b)/report/(\d+)'			=> 'secure report',	// report post
+	'/(\%b)/extract/(\d+)'			=> 'secure extract',	// extract post
+	'/(\%b)/upvote/(\d+)'			=> 'secure upvote',	// upvote post
+	'/(\%b)/anonymous_PM/(\d+)'			=> 'secure anonymous_pm',	// anonymous PM
 	'/(\%b)/deletebyip/(\d+)(/global)?'	=> 'secure deletebyip',		// delete all posts by IP address
 	'/(\%b)/(un)?lock/(\d+)'		=> 'secure lock',		// lock thread
 	'/(\%b)/(un)?sticky/(\d+)'		=> 'secure sticky',		// sticky thread
 	'/(\%b)/(un)?cycle/(\d+)'                         => 'secure cycle',          // cycle thread
+	'/(\%b)/(un)?follow/(\d+)'                         => 'follow',          // follow thread
 	'/(\%b)/bump(un)?lock/(\d+)'		=> 'secure bumplock',		// "bumplock" thread
 	
 	'/themes'				=> 'themes_list',		// manage themes
@@ -120,6 +143,15 @@ if (!$mod) {
 } elseif (isset($_GET['status'], $_GET['r'])) {
 	header('Location: ' . $_GET['r'], true, (int)$_GET['status']);
 	exit;
+}
+
+if ($config['cache']['enabled']) {
+	if ($stats['Statistics'] = cache::get('statistics_' . $mod['id'])) {
+		$stats['Statistics']['Total pageloads'] +=1;
+		cache::set('statistics_' . $mod['id'],$stats['Statistics']);
+	}
+	else
+		cache::set('statistics_' . $mod['id'],array('Total pageloads' => 1));
 }
 
 if (isset($config['mod']['custom_pages'])) {

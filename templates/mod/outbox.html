@@ -1,0 +1,36 @@
+{% if messages|count == 0 %}
+	<p style="text-align:center" class="unimportant">({% trans 'You haven\'t sent anything.' %})</p>
+{% else %}
+	<table class="modlog">
+		<tr>
+			<th>{% trans 'ID' %}</th>
+			<th>{% trans 'To' %}</th>
+			<th>{% trans 'Date' %}</th>
+			<th>{% trans 'Message snippet' %}</th>
+		</tr>
+		{% for message in messages %}
+			<tr{% if message.unread %} style="font-weight:bold"{% endif %}>
+				<td class="minimal">
+						{{ message.id }}
+				</td>
+				<td class="minimal">
+					{% if not message.username %}
+						<em>{% trans 'deleted?' %}</em>
+					{% elseif mod|hasPermission(config.mod.see_username) %}
+						<a href="?/new_PM/{{ message.username|e }}">{{ message.username|e }}</a>
+					{% elseif mod.id == message.to %}
+						<a href="?/users/{{ mod.id }}">{{ mod.username|e }}</a>
+					{% else %}
+						<em>{% trans 'anonymous' %}</em>
+					{% endif %}
+				</td>
+				<td class="minimal">
+					{{ message.time|date(config.post_date) }}
+				</td>
+				<td>
+						{{ message.snippet }}
+				</td>
+			</tr>
+		{% endfor %}
+	</table>
+{% endif %}

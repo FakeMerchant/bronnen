@@ -175,7 +175,9 @@
 			<th>Board</th>
 			<th>ID</th>
 			<th>Thread</th>
+			{% if mod|hasPermission(config.mod.show_ip) %}
 			<th>IP</th>
+			{% endif %}
 			<th>Name</th>
 			<th>Subject</th>
 			<th>File</th>
@@ -208,15 +210,13 @@
 						{% endif %}
 					</small>
 				</td>
+				{% if mod|hasPermission(config.mod.show_ip, post.board) %}
 				<td class="minimal">
-					{% if mod|hasPermission(config.mod.show_ip, post.board) %}
 						<a href="?/IP/{{ post.ip }}">
 							{{ post.ip }}
 						</a>
-					{% else %}
-						<em>hidden</em>
-					{% endif %}
 				</td>
+				{% endif %}
 				<td style="max-width:100px">
 					<small>
 						{% if post.email|length > 0 %}

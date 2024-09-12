@@ -1,4 +1,5 @@
 		<link rel="stylesheet" media="screen" href="{{ config.url_stylesheet }}">
+		<link rel="stylesheet" href="/stylesheets/menu.css">
 		{% if config.url_favicon %}<link rel="shortcut icon" href="{{ config.url_favicon }}">{% endif %}
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">
@@ -6,6 +7,13 @@
 		{% if config.default_stylesheet.1 != '' %}<link rel="stylesheet" type="text/css" id="stylesheet" href="{{ config.uri_stylesheets }}{{ config.default_stylesheet.1 }}">{% endif %}
 		{% if config.font_awesome %}<link rel="stylesheet" href="{{ config.root }}{{ config.font_awesome_css }}">{% endif %}
 		{% if config.country_flags_condensed %}<link rel="stylesheet" href="{{ config.root }}{{ config.country_flags_condensed_css }}">{% endif %}
+		<link rel="stylesheet" href="/stylesheets/highlightjs/dracula.css">
+		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+		<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+		<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+		<link rel="manifest" href="/manifest.json">
+		<link rel="mask-icon" href="/safari-pinned-tab.svg" color="#4417a3">
+		<meta name="theme-color" content="#000000">
 		<script type="text/javascript">
 			var configRoot="{{ config.root }}";
 			var inMod = {% if mod %}true{% else %}false{% endif %};
@@ -16,6 +24,7 @@
 			{% if not config.additional_javascript_compile %}
 			{% for javascript in config.additional_javascript %}<script type="text/javascript" src="{{ config.additional_javascript_url }}{{ javascript }}"></script>{% endfor %}
 			{% endif %}
+			<script>hljs.initHighlightingOnLoad();</script>
 		{% endif %}
 		{% if config.recaptcha %}<style type="text/css">{% raw %}
 			#recaptcha_area {

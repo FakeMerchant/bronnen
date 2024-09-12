@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+
+        <script type="text/javascript">
+	  var
+          {% if not no_post_form %}
+              active_page = "index"
+            , board_name = "{{ board.uri }}";
+	  {% else %}
+              active_page = "ukko";
+          {% endif %}
+        </script>
+
+	{% include 'header.html' %}
+	<title>{{ board.title|e }}</title>
+</head>
+<body class="8chan vichan {% if mod %}is-moderator{% else %}is-not-moderator{% endif %} active-{% if not no_post_form %}index{% else %}ukko{% endif %}" data-stylesheet="{% if config.default_stylesheet.1 != '' %}{{ config.default_stylesheet.1 }}{% else %}default{% endif %}">
+	{{ boardlist.top }}
+		
+	<header>
+		<h1>{{ board.title|e }}</h1>
+		<div class="subtitle">
+			{% if board.subtitle %}
+				{% if config.allow_subtitle_html %}
+					{{ board.subtitle }}
+				{% else %}
+					{{ board.subtitle|e }}
+				{% endif %}
+			{% endif %}
+			{% if mod %}<p><a href="?/">{% trans %}Return to dashboard{% endtrans %}</a></p>{% endif %}
+			{% if pm %}<p><div class="top_notice">You have <a href="?/PM/{{ pm.id }}">an unread PM</a>{% if pm.waiting > 0 %}, plus {{ pm.waiting }} more waiting{% endif %}.</div></p>{% endif %}
+			{% if notifications %}<p><div class="top_notice">You have <a href="?/notification/{{ notifications.id }}">a new notification</a>{% if notifications.waiting > 0 %}, plus {{ notifications.waiting }} more waiting{% endif %}. <a href="?/dismiss_all">Dismiss all</a>?</div></p>{% endif %}
+		</div>
+	</header>
+
+	{% include 'attention_bar.html' %}
+
+	{{ config.ad.top }}
+
+	{% if not no_post_form %}
+		{% include 'post_form.html' %}
+	{% else %}
+		{% include 'boardlist.html' %}
+	{% endif %}
+
+	{% if config.global_message %}<hr /><div class="blotter">{{ config.global_message }}</div>{% endif %}
+	<hr />
+	<form name="postcontrols" action="{{ config.post_url }}" method="post">
+	<input type="hidden" name="board" value="{{ board.uri }}" />
+	{% if mod %}<input type="hidden" name="mod" value="1" />{% endif %}
+	{{ body }}
+	<div id="post-moderation-fields" hidden></div>
+	</form>
+	
+	{{ boardlist.bottom }}
+
+	{{ config.ad.bottom }}
+
+	<footer>
+		<p class="unimportant" style="margin-top:20px;text-align:center;">- Tinyboard + 
+			<a href="https://engine.vichan.net/">vichan</a> {{ config.version }} -
+		<br>Tinyboard Copyright &copy; 2010-2014 Tinyboard Development Group
+		<br><a href="https://engine.vichan.net/">vichan</a> Copyright &copy; 2012-2016 vichan-devel</p>
+
+		{% for footer in config.footer %}<p class="unimportant" style="text-align:center;">{{ footer }}</p>{% endfor %}
+	</footer>
+	<script type="text/javascript">{% raw %}
+		ready();
+	{% endraw %}</script>
+	
+</body>
+</html>

@@ -1,5 +1,5 @@
-<div style="text-align:center">
-	<h2 style="margin:20px 0">{{ message }}</h2>
+<div class="ban" style="text-align:center">
+	<h2>{{ message }}</h2>
 	{% if board %}
 		<p>
 			<a href="{{ config.root }}{% if mod %}{{ config.file_mod }}?/{% endif %}{{ board.dir }}{{ config.file_index }}">
@@ -7,6 +7,7 @@
 			</a>
 		</p>
 	{% endif %}
+	<img class="404-image" style="padding: 2px 2px;display: inline-block; max-width: 99%;" src="/404.php" >
 </div>
 {% if debug and config.debug %}
 	<hr>

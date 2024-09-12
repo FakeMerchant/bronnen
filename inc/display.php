@@ -120,6 +120,7 @@ function error($message, $priority = true, $debug_stuff = false) {
 		'config' => $config,
 		'title' => _('Error'),
 		'subtitle' => _('An error has occured.'),
+		'boardlist' => createBoardlist($mod),
 		'body' => Element('error.html', array(
 			'config' => $config,
 			'message' => $message,
@@ -311,6 +312,11 @@ function secure_link_confirm($text, $title, $confirm_message, $href) {
 
 	return '<a onclick="if (event.which==2) return true;if (confirm(\'' . htmlentities(addslashes($confirm_message)) . '\')) document.location=\'?/' . htmlspecialchars(addslashes($href . '/' . make_secure_link_token($href))) . '\';return false;" title="' . htmlentities($title) . '" href="?/' . $href . '">' . $text . '</a>';
 }
+function secure_link_fa($fa, $title, $confirm_message, $href) {
+	global $config;
+
+	return '<a class="fa fa-'.$fa.'" onclick="if (event.which==2) return true;if (confirm(\'' . htmlentities(addslashes($confirm_message)) . '\')) document.location=\'?/' . htmlspecialchars(addslashes($href . '/' . make_secure_link_token($href))) . '\';return false;" title="' . htmlentities($title) . '" href="?/' . $href . '"></a>';
+}
 function secure_link($href) {
 	return $href . '/' . make_secure_link_token($href);
 }
@@ -322,7 +328,12 @@ function embed_html($link) {
 		if ($html = preg_replace($embed[0], $embed[1], $link)) {
 				if ($html == $link)
 					continue; // Nope
-			
+
+			if(isset($embed[2])){
+				$thumbnail = unserialize(file_get_contents("https://vimeo.com/api/v2/video/".preg_replace($embed[0],'$2',$link).".php"))[0]['thumbnail_large'];
+				$thumbnail = preg_replace("/^http:/i", "https:", $thumbnail);
+				$html = str_replace('%%vimeoplaceholder%%',$thumbnail,$html);
+			}
 			$html = str_replace('%%tb_width%%', $config['embed_width'], $html);
 			$html = str_replace('%%tb_height%%', $config['embed_height'], $html);
 			

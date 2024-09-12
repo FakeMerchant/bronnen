@@ -2,7 +2,7 @@
 	require 'inc/functions.php';
 	
 	if (!$config['search']['enable']) {
-		die(_("Post search is disabled"));
+		die(_("This post search method is deprecated. Log in with your Bronnen&trade; Brown&trade; account to use the new search feature."));
 	}
 
 	$queries_per_minutes = $config['search']['queries_per_minutes'];
@@ -14,7 +14,7 @@
 	} else {
 		$boards = listBoards(TRUE);
 	}
-	
+
 	$body = Element('search_form.html', Array('boards' => $boards, 'b' => isset($_GET['board']) ? $_GET['board'] : false, 'search' => isset($_GET['search']) ? str_replace('"', '&quot;', utf8tohtml($_GET['search'])) : false));
 	
 	if(isset($_GET['search']) && !empty($_GET['search']) && isset($_GET['board']) && in_array($_GET['board'], $boards)) {		
@@ -74,6 +74,7 @@
 			$body .= '<p class="unimportant" style="text-align:center">(Query too broad.)</p>';
 			echo Element('page.html', Array(
 				'config'=>$config,
+				'boardlist' => createBoardlist($mod),
 				'title'=>'Search',
 				'body'=>$body,
 			));
@@ -135,6 +136,7 @@
 			$body .= '<p class="unimportant" style="text-align:center">('._('Query too broad.').')</p>';
 			echo Element('page.html', Array(
 				'config'=>$config,
+				'boardlist' => createBoardlist($mod),
 				'title'=>'Search',
 				'body'=>$body,
 			));
@@ -169,6 +171,7 @@
 		
 	echo Element('page.html', Array(
 		'config'=>$config,
+		'boardlist' => createBoardlist($mod),
 		'title'=>_('Search'),
 		'body'=>'' . $body
 	));

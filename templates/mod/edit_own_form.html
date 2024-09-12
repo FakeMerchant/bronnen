@@ -1,0 +1,23 @@
+<form action="" method="post">
+	<input type="hidden" name="token" value="{{ token }}">
+	
+	<table>
+		<tr>
+			<th>
+				{% trans %}Subject{% endtrans %}
+			</th>
+			<td>
+				<input style="float:left;" type="text" name="subject" size="25" maxlength="100" autocomplete="off" value="{{ post.subject }}">
+				<input accesskey="s" style="margin-left:2px;" type="submit" name="post" value="{% trans %}Update{% endtrans %}">
+			</td>
+		</tr>
+		<tr>
+			<th>
+				{% trans %}Comment{% endtrans %}
+			</th>
+			<td>
+				<textarea name="body" id="body" rows="8" cols="35">{{ post.body_nomarkup }}</textarea>
+			</td>
+		</tr>
+	</table>
+</form>

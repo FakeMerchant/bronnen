@@ -1,0 +1,14 @@
+<form style="width:300px;margin:auto" action="?/proxy" method="post">
+	<input type="hidden" name="token" value="{{ token }}">
+	<input type="checkbox" name="proxy_protection" id="proxy_protection" {{ proxy }}> 
+	<label for="proxy_protection">{% trans 'Activate Proxy Protection (posters who are identified as proxies by the GetIPIntel database automatically get banned when they attempt to make a post).' %}</label>
+	</br>
+	<input type="checkbox" name="force_login" id="force_login" {{ forcelogin }}> 
+	<label for="proxy_protection">{% trans 'Prevent non-logged in users (e.g. HTTP request based spambots) from posting.' %}</label>
+	</br>
+	<p>Whitelisted Comment=IP Address pairs separated by newlines go here:</p>
+	<textarea name="whitelist" id="whitelist" rows="20" cols="35">{{ whitelist }}</textarea>
+	<p style="text-align:center">
+		<input type="submit" value="{% trans 'Submit' %}" name="proxy">
+	</p>
+</form>

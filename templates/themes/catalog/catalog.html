@@ -42,30 +42,32 @@
 				 data-sticky="{% if post.sticky %}true{% else %}false{% endif %}"
 				 data-locked="{% if post.locked %}true{% else %}false{% endif %}"
 			>
-                                <div class="thread grid-li grid-size-small">  
-                                        <a href="{{post.link}}">  
+                                <a href="{{post.link}}" style="decoration:none !important;color:inherit !important;"> 
+                                <div class="thread grid-li grid-size-small">
 						{% if post.youtube %}
 							<img src="//img.youtube.com/vi/{{ post.youtube }}/0.jpg" 
+						{% elseif post.num_files < 1 %}
+                            <img src="{{ config.image_blank }}" style="display: none;" 
 						{% else %}
 							<img src="{{post.file}}" 
 						{% endif %}
-                                                 id="img-{{ post.id }}" data-subject="{% if post.subject %}{{ post.subject|e }}{% endif %}" data-name="{{ post.name|e }}" data-muhdifference="{{ post.muhdifference }}" class="{{post.board}} thread-image" title="{{post.bump|date('%b %d %H:%M')}}">
-                                        </a>
+                                                 class="post-image" id="img-{{ post.id }}" data-subject="{% if post.subject %}{{ post.subject|e }}{% endif %}" data-name="{{ post.name|e }}" data-muhdifference="{{ post.muhdifference }}" class="{{post.board}} thread-image" title="{{post.bump|date('%b %d %H:%M')}}">
                                                 <div class="replies">
                                                         <strong>R: {{ post.reply_count }} / I: {{ post.image_count }}{% if post.sticky %} (sticky){% endif %}</strong>
-                                                        {% if post.subject %}
 								<p class="intro">
+								{% if post.subject %}
 									<span class="subject">
-										{{ post.subject|e }}
+										{{ post.subject|e }} 
+									</span>
+							{% endif %}
+									<span class="name">
+										{{ post.name|e }}
 									</span>
 								</p>
-							{% else %}
-								<br />
-							{% endif %}
-
 								{{ post.body }}
                                                 </div>
                                 </div>
+                                </a>
                         </div>
                 {% endfor %}
                 </div>

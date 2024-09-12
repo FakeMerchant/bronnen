@@ -41,6 +41,7 @@
 			
 			$recent_images = Array();
 			$recent_posts = Array();
+			$most_upvoted = Array();
 			$stats = Array();
 			
 			$boards = listBoards();
@@ -109,6 +110,21 @@
 				$recent_posts[] = $post;
 			}
 			
+			$query = sprintf("SELECT * FROM ``posts_int`` ORDER BY `upvotes` DESC LIMIT " . (int)$settings['limit_upvotes']);
+			$query = query($query) or error(db_error());
+			
+			while ($post = $query->fetch(PDO::FETCH_ASSOC)) {
+				openBoard('int');
+				
+				$post['link'] = $config['root'] . 'int/' . $config['dir']['res'] . link_for($post) . '#' . $post['id'];
+				if ($post['body'] != "")
+					$post['snippet'] = pm_snippet($post['body'], 30);
+				else
+					$post['snippet'] = "<em>" . _("(no comment)") . "</em>";
+				
+				$most_upvoted[] = $post;
+			}
+			
 			// Total posts
 			$query = 'SELECT SUM(`top`) FROM (';
 			foreach ($boards as &$_board) {
@@ -153,6 +169,7 @@
 				'boardlist' => createBoardlist(),
 				'recent_images' => $recent_images,
 				'recent_posts' => $recent_posts,
+				'most_upvoted' => $most_upvoted,
 				'stats' => $stats
 			));
 		}

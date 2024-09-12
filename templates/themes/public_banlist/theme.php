@@ -1,6 +1,7 @@
 <?php
 	require 'info.php';
-	
+	require_once 'inc/functions.php';
+
 	function pbanlist_build($action, $settings, $board) {
 		// Possible values for $action:
 		//	- all (rebuild everything, initialization)
@@ -37,6 +38,7 @@
 
 		        return Element('page.html', array(
 		                'config' => $config,
+				        'boardlist' => createBoardlist(0),
 		                'mod' => false,  
         		        'hide_dashboard_link' => true,
         		        'title' => _("Ban list"),

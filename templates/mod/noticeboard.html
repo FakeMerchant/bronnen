@@ -42,10 +42,12 @@
 			{% endif %} 
 			<small class="unimportant">
 				&mdash; {% trans 'by' %} 
-				{% if post.username %}
+				{% if not post.username %}
+					<em>{% trans 'deleted?' %}</em>
+				{% elseif mod|hasPermission(config.mod.see_username) %}
 					{{ post.username|e }}
 				{% else %}
-					<em>{% trans 'deleted?' %}</em>
+					<em>{% trans 'anonymous' %}</em>
 				{% endif %} 
 				{% trans 'at' %} 
 				{{ post.time|date(config.post_date) }} 

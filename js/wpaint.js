@@ -25,8 +25,8 @@ window.oekaki = (function(){
 var oekaki = {};
 
 oekaki.settings = new script_settings('wpaint');
-oekaki.height = oekaki.settings.get("height", 250);
-oekaki.width = oekaki.settings.get("width", 500);
+oekaki.height = oekaki.settings.get("height", 200);
+oekaki.width = oekaki.settings.get("width", 600);
 
 function dataURItoBlob(dataURI) {
     var binary = atob(dataURI.split(',')[1]);

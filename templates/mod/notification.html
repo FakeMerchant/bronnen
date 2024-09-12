@@ -1,0 +1,24 @@
+<form action="" method="post">
+	<table>
+		<tr>
+			<th>{% trans 'Date' %}</th>
+			<td>{{ time|date(config.post_date) }} <small>({{ time|ago }} ago)</small></td>
+			
+		</tr>
+		<tr>
+			<th>{% trans 'Message' %}</th>
+			<td>{{ message }}</td>
+		</tr>
+	</table>
+	
+	<ul style="list-style:none;text-align:center;padding:0">
+		<li style="padding:5px 0">
+			<input type="submit" name="delete" value="{% trans 'Delete notification' %}">
+		</li>
+		<li style="padding:5px 0">
+			<a href="?/notifications">
+				{% trans 'See all notifications' %}
+			</a>
+		</li>
+	</ul>
+</form>

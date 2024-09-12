@@ -10,7 +10,7 @@
 		<tr>
 			<th>{% trans 'Username' %}</th>
 			<td>
-				{% if new or mod|hasPermission(config.mod.editusers) %}
+				{% if new or (mod|hasPermission(config.mod.editusers) or (mod|hasPermission(config.mod.change_password) and user.id == mod.id)) %}
 					<input size="20" maxlength="30" type="text" name="username" value="{{ user.username|e }}" autocomplete="off">
 				{% else %}
 					{{ user.username|e }}

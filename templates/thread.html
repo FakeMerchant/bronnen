@@ -11,7 +11,7 @@
 
 	{% include 'header.html' %}
 
-	{% set meta_subject %}{% if config.thread_subject_in_title and thread.subject %}{{ thread.subject|e }}{% else %}{{ thread.body_nomarkup[:256]|remove_modifiers|e }}{% endif %}{% endset %}
+	{% set meta_subject %}{% if config.thread_subject_in_title and thread.subject %}{{ thread.subject|e }}{% else %}{{ thread.body_nomarkup|remove_modifiers|e|slice(0,255) ~ '...'}}{% endif %}{% endset %}
 
 	<meta name="description" content="{{ board.url }} - {{ board.title|e }} - {{ meta_subject }}" />
 	<meta name="twitter:card" value="summary">
@@ -19,17 +19,17 @@
 	<meta property="og:type" content="article" />
 	<meta property="og:url" content="{{ config.domain }}/{{ board.uri }}/{{ config.dir.res }}{{ thread.id }}.html" />
 	{% if thread.files.0.thumb %}<meta property="og:image" content="{{ config.domain }}/{{ board.uri }}/{{ config.dir.thumb }}{{ thread.files.0.thumb }}" />{% endif %}
-	<meta property="og:description" content="{{ thread.body_nomarkup|e }}" />
+	<meta property="og:description" content="{{ thread.body_nomarkup|remove_modifiers|e }}" />
 
 	<title>{{ board.url }} - {{ meta_subject }}</title>
 </head>
 <body class="8chan vichan {% if mod %}is-moderator{% else %}is-not-moderator{% endif %} active-thread" data-stylesheet="{% if config.default_stylesheet.1 != '' %}{{ config.default_stylesheet.1 }}{% else %}default{% endif %}">
+
 	{{ boardlist.top }}
 	<a name="top"></a>
-	{% if pm %}<div class="top_notice">You have <a href="?/PM/{{ pm.id }}">an unread PM</a>{% if pm.waiting > 0 %}, plus {{ pm.waiting }} more waiting{% endif %}.</div><hr />{% endif %}
 	{% if config.url_banner %}<img class="board_image" src="{{ config.url_banner }}" {% if config.banner_width or config.banner_height %}style="{% if config.banner_width %}width:{{ config.banner_width }}px{% endif %};{% if config.banner_width %}height:{{ config.banner_height }}px{% endif %}" {% endif %}alt="" />{% endif %}
 	<header>
-		<h1>{{ board.url }} - {{ board.title|e }}</h1>
+		<h1>{{ board.url }} - {{ board.title|e }} <small>({{ poster_count(board.uri) }} reader{% if poster_count(board.uri)!=1 %}s{% endif %})</small></h1>
 		<div class="subtitle">
 			{% if board.subtitle %}
 				{% if config.allow_subtitle_html %}
@@ -39,6 +39,8 @@
 				{% endif %}
 			{% endif %}
 			{% if mod %}<p><a href="?/">{% trans %}Return to dashboard{% endtrans %}</a></p>{% endif %}
+			{% if pm %}<p><div class="top_notice">You have <a href="?/PM/{{ pm.id }}">an unread PM</a>{% if pm.waiting > 0 %}, plus {{ pm.waiting }} more waiting{% endif %}.</div></p>{% endif %}
+			{% if notifications %}<p><div class="top_notice">You have <a href="?/notification/{{ notifications.id }}">a new notification</a>{% if notifications.waiting > 0 %}, plus {{ notifications.waiting }} more waiting{% endif %}. <a href="?/dismiss_all">Dismiss all</a>?</div></p>{% endif %}
 		</div>
 	</header>
 
@@ -71,7 +73,6 @@
 				<a id="link-quick-reply" href="#">[{% trans %}Post a Reply{% endtrans %}]</a>
 			</span>
 			
-			{% include 'report_delete.html' %}
 		</div>
 		
 		<div class="clearfix"></div>

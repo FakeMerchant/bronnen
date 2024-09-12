@@ -15,7 +15,7 @@
 	{{ boardlist.top }}
 	<header>
 		<h1>{{ settings.title }}</h1>
-		<div class="subtitle">{{ settings.subtitle }}</div>
+		<div class="subtitle">{{ settings.subtitle }}<a href="/int/"><img style="width: 333px;" src="/static/bronnen-welcome.png"></div></a>
 	</header>
 	
 	<div class="box-wrap">
@@ -44,6 +44,21 @@
 				{% endfor %}
 			</ul>
 		</div>
+		
+		<div class="box right">
+			<h2>Most Upvoted</h2>
+			<ul>
+				{% for post in most_upvoted %}
+					<li>
+						<strong>+{{ post.upvotes }}</strong>  
+						<a href="{{ post.link }}">
+							{{ post.snippet }}
+						</a>
+					</li>
+				{% endfor %}
+			</ul>
+		</div>
+		
 		<div class="box right">
 			<h2>Stats</h2>
 			<ul>

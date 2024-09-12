@@ -1,0 +1,81 @@
+<form>
+	<table>
+		<tr>
+			<th>{% trans 'User ID' %}</th>
+			<td>
+					&nbsp;#{{ user['User ID']|number_format|e }}
+			</td>
+		</tr>
+		<tr>
+			<th>{% trans 'Username' %}</th>
+			<td>
+					&nbsp;{{ user['Username']|e }}
+			</td>
+		</tr>
+		<tr>
+			<th>{% trans 'Account created' %}</th>
+			<td>
+				&nbsp;{{ user['Account created']|date(config.post_date) }}
+			</td>
+		</tr>
+		<tr>
+			<th>{% trans 'Started threads' %}</th>
+			<td>
+					&nbsp;{{ user['Started threads']|number_format|e }}
+			</td>
+		</tr>
+		<tr>
+			<th>{% trans 'Sent messages' %}</th>
+			<td>
+					&nbsp;{{ user['Sent messages']|number_format|e }}
+			</td>
+		</tr>
+		<tr>
+			<th>{% trans 'Total characters in messages' %}</th>
+			<td>
+				&nbsp;{{ user['Total characters in messages']|number_format|e }}
+			</td>
+		</tr>
+		<tr>
+			<th>{% trans 'Uploaded files' %}</th>
+			<td>
+					&nbsp;{{ user['Uploaded files']|number_format|e }}
+			</td>
+		</tr>
+		<tr>
+			<th>{% trans 'Total uploaded data' %}</th>
+			<td>
+				&nbsp;{{ (user['Total uploaded data']/1024/1024)|number_format(2,'.',',')|e }} MB
+			</td>
+		</tr>
+		<tr>
+			<th>{% trans 'Average message length' %}</th>
+			<td>
+					&nbsp;{{ user['Average message length']|number_format(2,'.',',')|e }}
+			</td>
+		</tr>
+		<tr>
+			<th>{% trans 'Upvotes received' %}</th>
+			<td>
+					&nbsp;{{ user['Upvotes received']|number_format|e }}
+			</td>
+		</tr>
+		<tr>
+			<th>{% trans 'Total pageloads' %}</th>
+			<td>
+				&nbsp;{{ user['Total pageloads']|number_format|e }}
+			</td>
+		</tr>
+				<tr>
+			<th>{% trans 'Activity points' %}</th>
+			<td>
+					&nbsp;{{ user['Activity points']|number_format|e }}
+			</td>
+		</tr>
+			<th>{% trans 'Threads followed' %}</th>
+			<td>
+					&nbsp;{{ user['Threads followed']|number_format|e }}
+			</td>
+		</tr>
+	</table>
+</form>

@@ -204,10 +204,10 @@ div.banner, a.unimportant {
     padding-top: 5px;
 }
 
-div.thread:hover {
+/*div.thread:hover {
     background: #44444f;
     border-color: #1c1c1c;
-}
+}*/
 
 span.heading {
     color: red;

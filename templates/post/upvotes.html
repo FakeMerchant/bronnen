@@ -1,0 +1,9 @@
+<span id="plus_{{ post.id }}"> 
+	{% if post.upvotes > 0 %}+{% endif %}
+</span>
+<span id="upvotes_{{ post.id }}">
+	{% if post.upvotes > 0 %}
+		{{ post.upvotes }}
+	{% endif %}
+</span>
+<a class="fa fa-thumbs-up"  title="{% trans %}Upvote{% endtrans %}" onclick="{% if mod %}upvote('{{ board.uri }}',{{ post.id }}){% else %}alert('You need to login to be able to upvote.'){% endif %}" href="javascript:void(0)"></a>

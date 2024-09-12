@@ -1,0 +1,5 @@
+{% if post.modifiers['flag proxy'] == "true"%}
+	<img class="flag" src="{{ config.uri_flags|sprintf('proxy') }}" alt="Proxy" title="Proxy"> 
+{% elseif post.modifiers['flag proxy'] == "whitelisted"%}
+	<img class="flag" src="{{ config.uri_flags|sprintf('whitelisted') }}" alt="Verified/Whitelisted Proxy" title="Verified/Whitelisted Proxy"> 
+{% endif %}

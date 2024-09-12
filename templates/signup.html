@@ -1,0 +1,25 @@
+{% if error %}<h2 style="text-align:center">{{ error }}</h2>{% endif %}
+<form method="post" action="">
+<table style="margin-top:25px;">
+	<tr>
+		<th>{% trans 'Username' %}</th>
+		<td>
+			<input size="20" maxlength="30" type="text" name="username" value="" autocomplete="off">
+		</td>
+	</tr>
+	<tr>
+		<th>{% trans 'Password' %}</th>
+		<td>
+		<input size="20" maxlength="30" type="password" name="password" value="" autocomplete="off">
+		</td>
+	</tr>
+	<tr>
+		<td></td>
+		<td>
+			<input type="submit" name="signup" value="{% trans 'Create user' %}"/>
+		</td>
+	</tr>
+	<tr><td></td><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="user.php">Login</a></td></tr>
+</table>
+</form>
+

@@ -5,6 +5,7 @@
 		<th>{% trans 'Type' %}</th>
 		<th>{% trans 'Boards' %}</th>
 		{% if mod|hasPermission(config.mod.modlog) %}
+			<th>{% trans 'Age' %}</th>
 			<th>{% trans 'Last action' %}</th>
 		{% endif %}
 		<th>&hellip;</th>
@@ -38,6 +39,7 @@
 				{% endif %}
 			</td>
 			{% if mod|hasPermission(config.mod.modlog) %}
+				<td>{{ user.created|ago }}</td>
 				<td>
 					{% if user.last %}
 						<span title="{{ user.action|e }}">{{ user.last|ago }}</span>

@@ -23,6 +23,8 @@ require_once 'inc/lock.php';
 require_once 'inc/queue.php';
 require_once 'inc/polyfill.php';
 @include_once 'inc/lib/parsedown/Parsedown.php'; // fail silently, this isn't a critical piece of code
+use DiceCalc\Calc as Calc;
+
 
 if (!extension_loaded('gettext')) {
 	require_once 'inc/lib/gettext/gettext.inc';
@@ -201,6 +203,8 @@ function loadConfig() {
 							')' .
 						'|' .
 							preg_quote($config['file_mod'], '/') . '\?\/.+' .
+						'|' .
+							preg_quote($config['file_user'], '/') . '\?\/.+' .
 					')([#?](.+)?)?$/ui';
 			} else {
 				// CLI mode
@@ -260,6 +264,9 @@ function loadConfig() {
 		if (in_array('webm', $config['allowed_ext_files']) ||
         	    in_array('mp4',  $config['allowed_ext_files']))
 			event_handler('post', 'postHandler');
+			
+		if (in_array('mp3', $config['allowed_ext_files']))
+			event_handler('post', 'audioHandler');
 	}
 	// Effectful config processing below:
 
@@ -298,8 +305,10 @@ function loadConfig() {
 	if (in_array('webm', $config['allowed_ext_files']) ||
             in_array('mp4',  $config['allowed_ext_files']))
 		require_once 'inc/lib/webm/posthandler.php';
-
-	event('load-config');
+		
+	if (in_array('mp3', $config['allowed_ext_files']))
+		require_once 'inc/lib/mp3/audiohandler.php';
+//	event('load-config');
 
 	if ($config['cache_config'] && !isset ($config['cache_config_loaded'])) {
 		file_put_contents('tmp/cache/cache_config.php', '<?php '.
@@ -1029,8 +1038,8 @@ function insertFloodPost(array $post) {
 }
 
 function post(array $post) {
-	global $pdo, $board;
-	$query = prepare(sprintf("INSERT INTO ``posts_%s`` VALUES ( NULL, :thread, :subject, :email, :name, :trip, :capcode, :body, :body_nomarkup, :time, :time, :files, :num_files, :filehash, :password, :ip, :sticky, :locked, :cycle, 0, :embed, :slug)", $board['uri']));
+	global $pdo, $board, $mod;
+	$query = prepare(sprintf("INSERT INTO ``posts_%s`` VALUES ( NULL, :thread, :subject, :email, :name, :trip, :capcode, :body, :body_nomarkup, :time, :time, :files, :num_files, :filehash, :password, :ip, :sticky, :locked, :cycle, 0, :embed, :upvotes, :voters, :slug, :user, :edits)", $board['uri']));
 
 	// Basic stuff
 	if (!empty($post['subject'])) {
@@ -1050,7 +1059,24 @@ function post(array $post) {
 	} else {
 		$query->bindValue(':trip', null, PDO::PARAM_NULL);
 	}
-
+	$query->bindValue(':upvotes', 0);
+	if(!empty($mod['id'])) {
+		$query->bindValue(':user', $mod['id']);
+		if ($post['has_file']) {
+			$size = 0;
+			foreach ($post['files'] as $file) {
+					$size += $file['size'];
+			}
+			$values = array (body_length($post['body_nomarkup']), $post['num_files'], $size);
+		} else {
+			$values = array (body_length($post['body_nomarkup']), 0, 0);
+		}
+		user_statistics(($post['op'] ? 'thread' : 'reply' ), $values);
+	} else {
+		$query->bindValue(':user', 0);
+	}
+	$query->bindValue(':edits', 0);
+	$query->bindValue(':voters', json_encode(array()));
 	$query->bindValue(':name', $post['name']);
 	$query->bindValue(':body', $post['body']);
 	$query->bindValue(':body_nomarkup', $post['body_nomarkup']);
@@ -1231,6 +1257,11 @@ function deletePost($id, $error_if_doesnt_exist=true, $rebuild_after=true) {
 	while ($post = $query->fetch(PDO::FETCH_ASSOC)) {
 		event('delete', $post);
 		
+		$notification_query = prepare('DELETE FROM ``notifications`` WHERE `board` = :board AND `post` = :post');
+		$notification_query->bindValue(':board', $board['uri']);
+		$notification_query->bindValue(':post', $post['id']);
+		$notification_query->execute() or error(db_error($query));
+		
 		if (!$post['thread']) {
 			// Delete thread HTML page
 			file_unlink($board['dir'] . $config['dir']['res'] . link_for($post) );
@@ -1261,6 +1292,11 @@ function deletePost($id, $error_if_doesnt_exist=true, $rebuild_after=true) {
 
 	$query = prepare(sprintf("DELETE FROM ``posts_%s`` WHERE `id` = :id OR `thread` = :id", $board['uri']));
 	$query->bindValue(':id', $id, PDO::PARAM_INT);
+	$query->execute() or error(db_error($query));
+
+	$query = prepare('DELETE FROM ``follows`` WHERE `board` = :board AND `post` = :post');
+	$query->bindValue(':board', $board['uri']);
+	$query->bindValue(':post', $id);
 	$query->execute() or error(db_error($query));
 
 	$query = prepare("SELECT `board`, `post` FROM ``cites`` WHERE `target_board` = :board AND (`target` = " . implode(' OR `target` = ', $ids) . ") ORDER BY `board`");
@@ -1364,13 +1400,18 @@ function index($page, $mod=false, $brief = false) {
 		}
 
 		if (!isset($cached)) {
-			$posts = prepare(sprintf("SELECT * FROM ``posts_%s`` WHERE `thread` = :id ORDER BY `id` DESC LIMIT :limit", $board['uri']));
+			$posts = prepare(sprintf("SELECT * FROM ``posts_%s`` WHERE `thread` = :id ORDER BY `sticky` DESC, `id` DESC LIMIT :limit", $board['uri']));
 			$posts->bindValue(':id', $th['id']);
 			$posts->bindValue(':limit', ($th['sticky'] ? $config['threads_preview_sticky'] : $config['threads_preview']), PDO::PARAM_INT);
 			$posts->execute() or error(db_error($posts));
 
 			$replies = array_reverse($posts->fetchAll(PDO::FETCH_ASSOC));
-
+			$sticky = array();
+			foreach ($replies as $key => $row)
+			{
+				$sticky[$key] = $row['sticky'];
+			}
+			array_multisort($sticky, SORT_DESC, $replies);
 			if (count($replies) == ($th['sticky'] ? $config['threads_preview_sticky'] : $config['threads_preview'])) {
 				$count = numPosts($th['id']);
 				$omitted = array('post_count' => $count['replies'], 'image_count' => $count['images']);
@@ -1902,7 +1943,7 @@ function extract_modifiers($body) {
 }
 
 function remove_modifiers($body) {
-	return preg_replace('@<tinyboard ([\w\s]+)>(.+?)</tinyboard>@usm', '', $body);
+	return preg_replace('@<tinyboard ([\w\s]+)>(.+)?</tinyboard>@usm', '', $body);
 }
 
 function markup(&$body, $track_cites = false, $op = false) {
@@ -1910,7 +1951,7 @@ function markup(&$body, $track_cites = false, $op = false) {
 	
 	$modifiers = extract_modifiers($body);
 	
-	$body = preg_replace('@<tinyboard (?!escape )([\w\s]+)>(.+?)</tinyboard>@us', '', $body);
+	$body = preg_replace('@<tinyboard (?!escape )([\w\s]+)>(.+)?</tinyboard>@us', '', $body);
 	$body = preg_replace('@<(tinyboard) escape ([\w\s]+)>@i', '<$1 $2>', $body);
 	
 	if (isset($modifiers['raw html']) && $modifiers['raw html'] == '1') {
@@ -1959,6 +2000,9 @@ function markup(&$body, $track_cites = false, $op = false) {
 
 	if ($config['auto_unicode']) {
 		$body = unicodify($body);
+		
+		if ($config['strip_combining_chars']) 
+			$body = strip_combining_chars($body);
 
 		if ($config['markup_urls']) {
 			foreach ($markup_urls as &$url) {
@@ -2124,6 +2168,8 @@ function markup(&$body, $track_cites = false, $op = false) {
 	$tracked_cites = array_unique($tracked_cites, SORT_REGULAR);
 
 	$body = preg_replace("/^\s*&gt;.*$/m", '<span class="quote">$0</span>', $body);
+	
+	$body = preg_replace("/^\s*&lt;.*$/m", '<span style="color:rgb(97, 160, 216);" class="bluetext">$0</span>', $body);
 
 	if ($config['strip_superfluous_returns'])
 		$body = preg_replace('/\s+$/', '', $body);
@@ -2204,7 +2250,7 @@ function strip_combining_chars($str) {
 		$o = 0;
 		$ord = ordutf8($char, $o);
 
-		if ( ($ord >= 768 && $ord <= 879) || ($ord >= 1536 && $ord <= 1791) || ($ord >= 3655 && $ord <= 3659) || ($ord >= 7616 && $ord <= 7679) || ($ord >= 8400 && $ord <= 8447) || ($ord >= 65056 && $ord <= 65071))
+		if ( ($ord >= 768 && $ord <= 879) || ($ord >= 1536 && $ord <= 1791) || ($ord >= 3584 && $ord <= 3839) || ($ord >= 7616 && $ord <= 7679) || ($ord >= 8400 && $ord <= 8447) || ($ord >= 65056 && $ord <= 65071))
 			continue;
 
 		$str .= $char;
@@ -2588,55 +2634,22 @@ function shell_exec_error($command, $suppress_stdout = false) {
  */
 function diceRoller($post) {
 	global $config;
-	if(strpos(strtolower($post->email), 'dice%20') === 0) {
-		$dicestr = str_split(substr($post->email, strlen('dice%20')));
-
-		// Get params
-		$diceX = '';
-		$diceY = '';
-		$diceZ = '';
-
-		$curd = 'diceX';
-		for($i = 0; $i < count($dicestr); $i ++) {
-			if(is_numeric($dicestr[$i])) {
-				$$curd .= $dicestr[$i];
-			} else if($dicestr[$i] == 'd') {
-				$curd = 'diceY';
-			} else if($dicestr[$i] == '-' || $dicestr[$i] == '+') {
-				$curd = 'diceZ';
-				$$curd = $dicestr[$i];
-			}
-		}
-
-		// Default values for X and Z
-		if($diceX == '') {
-			$diceX = '1';
-		}
-
-		if($diceZ == '') {
-			$diceZ = '+0';
-		}
-
-		// Intify them
-		$diceX = intval($diceX);
-		$diceY = intval($diceY);
-		$diceZ = intval($diceZ);
-
-		// Continue only if we have valid values
-		if($diceX > 0 && $diceY > 0) {
-			$dicerolls = array();
-			$dicesum = $diceZ;
-			for($i = 0; $i < $diceX; $i++) {
-				$roll = rand(1, $diceY);
-				$dicerolls[] = $roll;
-				$dicesum += $roll;
-			}
-
-			// Prepend the result to the post body
-			$modifier = ($diceZ != 0) ? ((($diceZ < 0) ? ' - ' : ' + ') . abs($diceZ)) : '';
-			$dicesum = ($diceX > 1) ? ' = ' . $dicesum : '';
-			$post->body = '<table class="diceroll"><tr><td><img src="'.$config['dir']['static'].'d10.svg" alt="Dice roll" width="24"></td><td>Rolled ' . implode(', ', $dicerolls) . $modifier . $dicesum . '</td></tr></table><br/>' . $post->body;
-		}
+	require 'inc/lib/dicecalc/src/DiceCalc/Calc.php';
+	require 'inc/lib/dicecalc/src/DiceCalc/CalcSet.php';
+	require 'inc/lib/dicecalc/src/DiceCalc/CalcDice.php';
+	require 'inc/lib/dicecalc/src/DiceCalc/CalcOperation.php';
+	require 'inc/lib/dicecalc/src/DiceCalc/Random.php';
+	if(strpos(strtolower($post->email), 'roll%20') === 0) {
+		$dicestr = htmlspecialchars_decode(str_replace('%20',' ',substr($post->email, strlen('roll%20'))));
+		$post->email = '';
+		$calc = new Calc( $dicestr );
+		$query=$calc->infix();
+		$result=$calc(); 
+		if ($result===TRUE)
+			$result='True';
+		elseif($result===FALSE)
+			$result='False';
+		$post->body = $post->body . '<br/>'.'<div style="padding-top:5px"><img src="'.$config['dir']['static'].'d10.svg" alt="Dice roll" title="'.htmlspecialchars($query).'" width="24" style="vertical-align: middle;padding-right:5px;"><span>Rolled <b>'. htmlspecialchars($dicestr).'</b>. Result: <b>'.$result.'</b>.</span></div>'  ;
 	}
 }
 
@@ -2824,4 +2837,667 @@ function strategy_first($fun, $array) {
 	case 'sb_ukko':
 		return array('defer');
 	}
+}
+
+function get_ip_address(){
+    foreach (array('HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR') as $key){
+        if (array_key_exists($key, $_SERVER) === true){
+            foreach (explode(',', $_SERVER[$key]) as $ip){
+                $ip = trim($ip); // just to be safe
+
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false){
+                    return $ip;
+                }
+            }
+        }
+    }
+}
+
+function build_cutom_index($query,$title) {
+	global $config, $mod, $pdo;
+	$body = '';
+	if ($query) {
+		$query = preg_replace('/UNION ALL $/', 'ORDER BY `bump` DESC', $query);
+		$query = prepare($query);
+		$query->bindValue(':user', $mod['id']);
+		$query->execute() or error(db_error($query));
+		while($post = $query->fetch()) {
+			openBoard($post['board']);
+			$thread = new Thread($post, $mod ? '?/' : $config['root'], $mod);
+			$posts = prepare(sprintf("SELECT * FROM ``posts_%s`` WHERE `thread` = :id ORDER BY `id` DESC LIMIT :limit", $post['board']));
+			$posts->bindValue(':id', $post['id']);
+			$posts->bindValue(':limit', ($post['sticky'] ? $config['threads_preview_sticky'] : $config['threads_preview']), PDO::PARAM_INT);
+			$posts->execute() or error(db_error($posts));
+			$num_images = 0;
+			while ($po = $posts->fetch()) {
+				if ($po['files'])
+				$num_images++;
+				$thread->add(new Post($po, $mod ? '?/' : $config['root'], $mod));
+			}
+			if ($posts->rowCount() == ($post['sticky'] ? $config['threads_preview_sticky'] : $config['threads_preview'])) {
+				$ct = prepare(sprintf("SELECT COUNT(`id`) as `num` FROM ``posts_%s`` WHERE `thread` = :thread UNION ALL SELECT COUNT(`id`) FROM ``posts_%s`` WHERE `files` IS NOT NULL AND `thread` = :thread", $post['board'], $post['board']));
+				$ct->bindValue(':thread', $post['id'], PDO::PARAM_INT);
+				$ct->execute() or error(db_error());
+				$c = $ct->fetch();
+				$thread->omitted = $c['num'] - ($post['sticky'] ? $config['threads_preview_sticky'] : $config['threads_preview']);
+				$c = $ct->fetch();
+				$thread->omitted_images = $c['num'] - $num_images;
+			}
+			$thread->posts = array_reverse($thread->posts);
+			$body .= '<h2><a  href="?/' . $post['board'] . '/">/' . $post['board'] . '/</a></h2>';
+			$body .= $thread->build(true);
+		}
+	}
+	$board = array(
+		'uri' => 'int',
+		'title' => $title
+	);
+	return Element('my_threads.html', array(
+				'config' => $config,
+				'board' => $board,
+				'no_post_form' => true,
+				'body' => $body,
+				'mod' => $mod,
+				'boardlist' => createBoardlist($mod),
+	));
+}
+
+function body_length($body,$returnbody = false) {
+	global $board, $config;
+	$body = preg_replace('@\n?<tinyboard (?!escape )([\w\s]+)>(.+)?</tinyboard>\n?@us', '', $body);
+	$body = preg_replace('@\n?<(tinyboard) escape ([\w\s]+)>\n?@i', '', $body);
+	if (!$returnbody)
+		return mb_strlen($body);
+	else
+		return preg_replace('@[\n\r]@us', ' ', $body);
+}
+
+
+function user_statistics($action = '', $values = FALSE, $modID = FALSE) {
+	global $config, $mod;
+	if (!$modID)
+		$modID = $mod['id'];
+	$query = prepare('SELECT `stats` FROM ``mods`` WHERE `id` = :id');
+	$query->bindValue(':id', $modID);
+	$query->execute() or error(db_error($query));
+	if (!($result = $query->fetch(PDO::FETCH_ASSOC)))
+		return false;
+	$stats = json_decode($result['stats'],true);
+	if (!isset($stats['Statistics']))
+		$stats['Statistics'] = array(
+		'Started threads' => 0,
+		'Sent messages' => 0,
+		'Total characters in messages' => 0,
+		'Uploaded files' => 0,
+		'Total uploaded data' => 0,
+		'Average message length' => 0,
+		'Upvotes given' => 0,
+		'Upvotes received' => 0,
+		'Total pageloads' => 0,
+		'Activity points' => 0,
+		'Threads followed' => 0
+		);
+	if (isset($stats['Followed Threads']))
+		unset($stats['Followed Threads']);
+		
+	if (!($followedThreads = cache::get('followed_threads_' . $modID))) {
+		$query = prepare('SELECT `board`, `post`, `seen`, `title` FROM ``follows`` WHERE `id` = :id');
+		$query->bindValue(':id', $modID);
+		$query->execute() or error(db_error($query));
+		$followedThreads = $query->fetchAll(PDO::FETCH_ASSOC);
+		cache::set('followed_threads_' . $modID, $followedThreads);
+	}
+	
+	$stats['Statistics']['Threads followed'] = count($followedThreads);
+	
+	if ($cachedStats = cache::get('statistics_' . $modID))
+		if($cachedStats['Total pageloads'] > $stats['Statistics']['Total pageloads'])
+			$stats['Statistics']['Total pageloads'] = $cachedStats['Total pageloads'];
+	switch ($action) {
+		case 'thread':
+			$stats['Statistics']['Started threads']+=1;
+			$stats['Statistics']['Total characters in messages']+=$values[0];
+			$stats['Statistics']['Uploaded files']+=$values[1];
+			$stats['Statistics']['Total uploaded data']+=$values[2];
+			$stats['Statistics']['Average message length']=$stats['Statistics']['Total characters in messages']/($stats['Statistics']['Started threads']+$stats['Statistics']['Sent messages']);
+			break;
+		case 'reply':
+			$stats['Statistics']['Sent messages']+=1;
+			$stats['Statistics']['Total characters in messages']+=$values[0];
+			$stats['Statistics']['Uploaded files']+=$values[1];
+			$stats['Statistics']['Total uploaded data']+=$values[2];
+			$stats['Statistics']['Average message length']=$stats['Statistics']['Total characters in messages']/($stats['Statistics']['Started threads']+$stats['Statistics']['Sent messages']);
+			break;
+		case 'upvote':
+			$stats['Statistics']['Upvotes given']+=1;
+			break;
+		case 'upvoted':
+			$stats['Statistics']['Upvotes received']+=1;
+			break;
+		default:
+			break;
+	}
+	$stats['Statistics']['Activity points']=$stats['Statistics']['Started threads']*150+$stats['Statistics']['Sent messages']*100+
+	$stats['Statistics']['Uploaded files']*50+intdiv($stats['Statistics']['Total uploaded data'],1024*50)+
+	$stats['Statistics']['Upvotes received']*100+intdiv($stats['Statistics']['Total pageloads'] ,2);
+	$query = prepare(sprintf("UPDATE ``mods`` SET `stats` = '%s' WHERE `id` = :id", json_encode($stats)));
+	$query->bindValue(':id', $modID);
+	$query->execute() or error(db_error($query));
+
+	cache::set('statistics_' . $modID, $stats['Statistics']);
+	return true;
+}
+
+function notification_message($board,$post,$type,$counter,$title) {
+	global $config;
+
+	$message = sprintf('%s >>>/%s/%d%s has %s', ($type == 'follow' ? 'Thread' : ($type == 'thread' ? 'Your thread' : 'Your post')), $board, $post, ($title ? ' ('.$title.')' : ''),
+	($type == 'upvote' ? 'been upvoted'.($counter == 1 ? '!' : sprintf(' %d times!',$counter)) : ($counter == 1 ? 'a new reply.': sprintf('%d new replies.',$counter))));
+
+	$message = escape_markup_modifiers($message);
+	markup($message);
+		
+	return $message;
+}
+
+function subjectification($body,$subject,$post = FALSE) {
+	$body = body_length($body,true);
+	return (strlen($body) > 0 ? ((strlen($body) > 40) ? substr($body,0,39).'...' : $body ) : 
+		(strlen($body) > 5 ? ((strlen($body) > 40) ? substr($body,0,39).'...' : 
+		$body ) : ($post ? sprintf('Thread #%d',$post):'')));
+}
+
+function notify($board, $post, $type, $modID, $title = FALSE,$thread = FALSE) {
+	global $config;
+	if (!$modID)
+		return false;
+	$thread = (is_null($thread) ? false : $thread);
+	$query = prepare("SELECT `id`, `counter` FROM ``notifications`` WHERE `to` = :to AND `type` = :type AND `board` = :board AND `post` = :post");
+	$query->bindValue(':to', $modID);
+	$query->bindValue(':type', $type);
+	$query->bindValue(':board', $board);
+	$query->bindValue(':post', $post);
+	$query->execute() or error(db_error($query));
+	if ($notification = $query->fetch(PDO::FETCH_ASSOC)) {
+		$query = prepare('UPDATE ``notifications`` SET `message` = :message,`time` = :time , `counter` = `counter`+1, `unread` = 1 WHERE `id` = :id');
+		$query->bindValue(':message', notification_message($board,$post,$type,$notification['counter']+1,$title));
+		$query->bindValue(':time', time());
+		$query->bindValue(':id', $notification['id']);
+		$query->execute() or error(db_error($query));
+	} else {
+		$query = prepare("INSERT INTO ``notifications`` VALUES (NULL, :to, :message, :time, 1, 1, :type, :board, :post,:thread)");
+		$query->bindValue(':to', $modID);
+		$query->bindValue(':message', notification_message($board,$post,$type,1,$title));
+		$query->bindValue(':time', time());
+		$query->bindValue(':type', $type);
+		$query->bindValue(':board', $board);
+		$query->bindValue(':post', $post);
+		$query->bindValue(':thread', ($thread?$thread:$post));
+		$query->execute() or error(db_error($query));
+	}
+
+	cache::delete('notifications_unread_' . $modID);
+	cache::delete('notifications_unreadcount_' . $modID);
+}
+
+function mass_notify($tracked_cites,$thread = 0) {
+	global $mod;
+	$modID = (!$mod ? 0 : $mod['id']);
+	$query = '';
+	foreach ($tracked_cites as $cite) {
+		$query .= sprintf("SELECT `id`,`thread`,`user`, '%s' AS `board` FROM ``posts_%s`` WHERE `id` = %d AND `user` != %d AND `id` != %d UNION ALL ", $cite[0], $cite[0],$cite[1],$modID,$thread);
+	}
+	$query = preg_replace('/UNION ALL $/', '', $query);
+	$query = prepare($query);
+	$query->execute() or error(db_error($query));
+	while ($result = $query->fetch(PDO::FETCH_ASSOC)) {
+		notify($result['board'],$result['id'],'post',$result['user'],false,$result['thread']);
+	}
+	
+}
+
+function mass_follower_notify($board, $post, $opID, $title) {
+	global $mod;
+	$modID = (!$mod ? 0 : $mod['id']);
+	$query = prepare('SELECT `id` FROM ``follows`` WHERE `board` = :board AND `post` = :post AND `id` != :id AND `id` != :mod');
+	$query->bindValue(':board', $board);
+	$query->bindValue(':post', $post);
+	$query->bindValue(':id', $opID);
+	$query->bindValue(':mod', $modID);
+	$query->execute() or error(db_error($query));
+	while ($poster = $query->fetchColumn()) {
+		notify($board,$post,'follow',$poster,$title);
+		cache::delete('followed_threads_' . $poster);
+	}
+	$query = prepare('UPDATE  ``follows`` SET `seen` = `seen`+1 WHERE `board` = :board AND `post` = :post AND `id` != :mod');
+	$query->bindValue(':board', $board);
+	$query->bindValue(':post', $post);
+	$query->bindValue(':mod', $modID);
+	$query->execute() or error(db_error($query));
+	cache::delete('followed_threads_' . $opID);
+}
+
+function update_poster_count($boardName) {
+	global $mod;
+	$postersOnline = cache::get('posters_online_' . $boardName);
+	$postersOnline = $postersOnline ? $postersOnline : array();
+	$postersOnline[$mod['id']] = time();
+	if (time()-cache::get('last_ran_' . $boardName) >= 60) {
+		cache::set('last_ran_' . $boardName, time() );
+		foreach ($postersOnline as $key=>$value) 
+			if (time()-$value >= 300) 
+				unset($postersOnline[$key]);
+	}
+	cache::set('posters_online_' . $boardName,$postersOnline);
+	cache::set('poster_count_' . $boardName,count($postersOnline));
+}
+
+function checkProxy($ip){
+	$contactEmail=""; //you must change this to your own email address
+	$timeout=5; //by default, wait no longer than 5 secs for a response
+	$banOnProbability=0.98; //if getIPIntel returns a value higher than this, function returns true, set to 0.99 by default
+	$lasthour=time()-60*60*1;
+	$yesterady=$lasthour-60*60*23;
+	$lastweek=$yesterady-60*60*24*6;
+	$query = prepare("SELECT * FROM ``proxies`` WHERE `ip` = :ip");
+	$query->bindValue(':ip', $ip);
+	$query->execute() or error(db_error($query));
+	if ($result = $query->fetch(PDO::FETCH_ASSOC)) {
+		if ($result['time']<$lastweek || ($result['probability']<0&&$result['time']<$lasthour))
+			$update=true;
+		elseif ($result['probability']>$banOnProbability)
+			return true;
+		else
+			return false;
+	}
+	$query = prepare("SELECT * FROM ``proxies`` WHERE `time` > :yesterday");
+	$query->bindValue(':yesterday', $yesterady, PDO::PARAM_INT);
+	$query->execute() or error(db_error($query));
+	if ($query->rowCount()>450) {
+		modLog("Limit of 500 queries a day exceeded");
+		return false;
+	}
+	//init and set cURL options
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+	//if you're using custom flags (like flags=m), change the URL below
+	curl_setopt($ch, CURLOPT_URL, "http://check.getipintel.net/check.php?ip=$ip&contact=$contactEmail");
+	$response=curl_exec($ch);
+	curl_close($ch);
+	if ($response < 0 || strcmp($response, "") == 0 ) {
+		modLog("This IP returned a bad response on GetIPIntel");
+		$response = -1;
+	}
+	if (isset($update))
+		$query = prepare("UPDATE ``proxies`` SET `probability` = :probability, `time` = :time WHERE `ip` = :ip");
+	else
+		$query = prepare("INSERT INTO ``proxies`` VALUES (:ip, :probability, :time)");
+	$query->bindValue(':ip', $ip);
+	$query->bindValue(':probability', $response);
+	$query->bindValue(':time', time());
+	$query->execute() or error(db_error($query));
+	if ($response > $banOnProbability) 
+		return true;
+	else
+		return false;
+}
+
+function Dot2LongIP ($IPaddr) {
+    if ($IPaddr == "")
+    {
+	return 0;
+    }
+    else {
+	    $ips = explode(".", $IPaddr);
+	    return ($ips[3] + $ips[2] * 256 + $ips[1] * 256 * 256 + $ips[0] * 256 * 256 * 256);
+    }
+}
+
+function Dot2LongIPv6 ($IPaddr) {
+    $int = inet_pton($IPaddr);
+    $bits = 15;
+    $ipv6long = 0;
+    while($bits >= 0){
+        $bin = sprintf("%08b", (ord($int[$bits])));
+        if($ipv6long){
+            $ipv6long = $bin . $ipv6long;
+        }
+        else{
+            $ipv6long = $bin;
+        }
+        $bits--;
+    }
+    $ipv6long = gmp_strval(gmp_init($ipv6long, 2), 10);
+    return $ipv6long;
+}
+
+function getIPLocation($ip) {
+	if(filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)){
+		$dbid = 'ip2location_db11';
+		$ipno = Dot2LongIP($ip);
+	}
+	elseif(filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)){
+		$dbid = 'ip2location_db11_ipv6';
+		$ipno = Dot2LongIPv6($ip);
+	}
+	else
+	    error('Invalid IP');
+	$result = cache::get('iplocation_'.$ipno);
+	if( isset($result) && time()-$result['time'] < 60*60*24*7)
+		return $result;
+	$query = prepare(sprintf("SELECT * FROM ``%s`` WHERE :ipno >= `ip_from` AND :ipno <= `ip_to`", $dbid));
+	$query->bindValue(':ipno', $ipno, PDO::PARAM_INT);
+	$query->execute() or error(db_error($query));
+	$result =$query->fetch(PDO::FETCH_ASSOC);
+	$result['time']=time();
+	$query = prepare(sprintf("SELECT `demonym` FROM ``countries`` WHERE `cca2` = '%s'", $result['country_code']));
+	$query->execute() or error(db_error($query));
+	$result['demonym'] =$query->fetchColumn();
+	cache::set('iplocation_'.$ipno,$result);
+	return $result;
+}
+
+
+function geolocs($ip,$_mod = null,$skip_proxy = FALSE) {
+	global $config;
+	if (isset($_mod))
+		$mod['id'] = &$_mod;
+	else
+		global $mod;
+	$geoloc=getIPLocation($ip);
+	$geoloc['isocode']=$geoloc['country_code'];
+	$geoloc['country_code']=strtolower($geoloc['isocode']);
+	$geoloc['ip']=$ip;
+	switch ($geoloc['region_name']) {
+		case 'Bayern':
+			$geoloc['country_code']='bav';
+			break;
+		case 'Quebec':
+			$geoloc['country_code']='que';
+			break;
+		case 'Scotland':
+			$geoloc['country_code']='sco';
+			break;
+		case 'Rio Grande do Sul':
+			$geoloc['country_code']='sbr';
+			break;
+		case 'Parana':
+			$geoloc['country_code']='sbr';
+			break;
+		case 'Santa Catarina':
+			$geoloc['country_code']='sbr';
+			break;
+		case 'Texas':
+			$geoloc['country_code']='tex';
+			break;
+		case 'Catalunya':
+			$geoloc['country_code']='cat';
+			break;
+		default:
+			break;
+	}
+	if ($geoloc['country_code']=='fi'){
+		switch ($geoloc['city_name']) {
+		case 'Helsinki':
+			$geoloc['country_code']='hki';
+			break;
+		case 'Espoo':
+			$geoloc['country_code']='esp';
+			break;
+		case 'Turku':
+			$geoloc['country_code']='tku';
+			break;
+		case 'Tampere':
+			$geoloc['country_code']='tmp';
+			break;
+		case 'Mikkeli':
+			$geoloc['country_code']='mik';
+			break;
+		case 'Oulu':
+			$geoloc['country_code']='oul';
+			break;
+		default:
+			break;
+		}
+	}
+	if ($geoloc['country_code']=='-') {
+		$geoloc['country_code']='a1';
+		$geoloc['isocode']='a1';
+		$geoloc['country_name']="Pite\u{e5}'s cranium";
+		$geoloc['region_name']="Pite\u{e5}'s cranium";
+		$geoloc['demonym']="schizophrenic";
+	}
+	if ($mod['id']==2644) {
+		$geoloc['country_code']='mrburns';
+	}
+// 	elseif ($mod['id']==45) {
+// 		$geoloc['country_code']='itsick';
+// 	}
+	elseif ($mod['id']==13) {
+		$geoloc['country_code']='kgs';
+	}
+	elseif ($mod['id']==7) {
+		$geoloc['country_code']='kotia';
+	}
+	elseif ($mod['id']==8) {
+		$geoloc['country_code']='lucan';
+	}
+	elseif ($mod['id']==10) {
+		$geoloc['country_code']='umineko';
+	}
+	elseif ($mod['id']==6) {
+		$geoloc['country_code']='trees';
+	}
+	elseif ($mod['id']==31) {
+		$geoloc['country_code']='kidrater';
+	}
+	elseif ($mod['id']==71) {
+		$geoloc['country_code']='adam';
+	}
+	elseif ($mod['id']==50) {
+		$geoloc['country_code']='paintknight';
+	}
+	elseif ($mod['id']==67) {
+		$geoloc['country_code']='mongo';
+	}
+	elseif ($mod['id']==1205) {
+		$geoloc['country_code']='rabbi';
+	}
+// 	elseif ($mod['id']==1493) {
+// 		$geoloc['country_code']='roystory';
+// 	}
+// 	elseif ($mod['id']==1493) {
+// 		$geoloc['country_code']='horsecockpizza';
+// 	}
+    elseif ($mod['id']==76) {
+		$geoloc['country_code']='daunas';
+	}
+	elseif ($mod['id']==81) {
+		$geoloc['country_code']='potato';
+	}
+	elseif ($mod['id']==25) {
+		$geoloc['country_code']='spreadsheet';
+	}
+	elseif ($mod['id']==44) {
+		$geoloc['country_code']='curizinga';
+	}
+	elseif ($mod['id']==110) {
+		$geoloc['country_code']='piano';
+	}
+	elseif ($mod['id']==5866) {
+		$geoloc['country_code']='pozz';
+	}
+	elseif ($mod['id']==86) {
+		$geoloc['country_code']='wacky';
+	}
+	elseif ($mod['id']==34) {
+		$geoloc['country_code']='plato';
+	}
+	elseif ($mod['id']==1959 || $mod['id']==27341)  {
+		$geoloc['country_code']='brick';
+	}
+	elseif ($mod['id']==27) {
+		$geoloc['country_code']='pack';
+	}
+	elseif ($mod['id']==108) {
+		$geoloc['country_code']='cous';
+	}
+	elseif ($mod['id']==22770) {
+		$geoloc['country_code']='edg';
+	}
+	elseif ($mod['id']==1254 || $mod['id']==5831 || $mod['id']==6543 || $mod['id']==6643) {
+		$geoloc['country_code']='kroger';
+	}
+	elseif ($mod['id']==4969 || $mod['id']==3808) {
+		$geoloc['country_code']='shitghost';
+	}
+	elseif ($mod['id']==218) {
+		$geoloc['country_code']='nazifur';
+	}
+	elseif ($mod['id']==555) {
+		$geoloc['country_code']='puppyball';
+	}
+	elseif ($mod['id']==1245) {
+		$geoloc['country_code']='gtr';
+	}
+	elseif ($mod['id']==5623) {
+		$geoloc['country_code']='ugs';
+	}
+	elseif ($mod['id']==120) {
+		$geoloc['country_code']='krusty';
+#		$country_code='elliot';	
+	}
+	elseif ($mod['id']==43) {
+		$geoloc['country_code']='relaks';
+	}
+	elseif ($mod['id']==16) {
+		$geoloc['country_code']='animeass';
+	}
+	elseif ($mod['id']==42) {
+		$geoloc['country_code']='beef';
+	}
+	elseif ($mod['id']==6153) {
+		$geoloc['country_code']='ricepudding';
+	}
+	elseif ($mod['id']==46) {
+		$geoloc['country_code']='hairfuck';
+	}
+	elseif ($mod['id']==5326) {
+		$geoloc['country_code']='saddam';
+	}
+	elseif ($mod['id']==102) {
+		$geoloc['country_code']='estochennai';
+	}
+	elseif ($mod['id']==311) {
+		$geoloc['country_code']='molyneux';
+	}
+	elseif ($mod['id']==3325) {
+		$geoloc['country_code']='bateman';
+	}
+	elseif ($mod['id']==6608) {
+		$geoloc['country_code']='se-kc';
+	}
+	elseif ($mod['id']==207 || $mod['id']==29668 || $mod['id']==700) {
+		$geoloc['country_code']='faggot';
+	}
+	elseif ($mod['id']==212) {
+		$geoloc['country_code']='seanass';
+	}
+//	elseif ($mod['id']==7479 ) {
+//		$geoloc['country_code']='animefinn';
+//	}
+	elseif ($mod['id']==1973 ) {
+		$geoloc['country_code']='shirley';
+	}
+	elseif ($mod['id']==17 ) {
+		$geoloc['country_code']='reiass';
+// 		if (time() >= 1529967600 && time() < 1530054000) {
+// 			$geoloc['country_code']='hewat';
+// 		}
+	}
+	elseif ($mod['id']==1783 ) {
+		$geoloc['country_code']='coolguy';
+	}
+//	elseif ($mod['id']==2571) {
+//		$geoloc['country_code']='roystory';
+//	}
+	elseif ($mod['id']==18330) {
+		$geoloc['country_code']='us-ne';
+	}
+	elseif ($mod['id']==7168) {
+		$geoloc['country_code']='ron';
+	}
+	elseif ($mod['id'] == 36146) {
+		$geoloc['country_code']='baka';
+	}
+// 	elseif ($mod['id']==11537) {
+// 		$geoloc['country_code']='milan';
+// 	}
+//	elseif ($mod['id']==66) {
+//		$geoloc['country_code']='kctire';
+//	}
+	elseif ($mod['id']==7965) {
+		$geoloc['country_code']='bumpkin';
+	}
+	elseif ($mod['id']==13416) {
+		$geoloc['country_code']='karaboga';
+	}
+	elseif ($mod['id']==38) {
+		$geoloc['country_code']='pk';
+		$geoloc['country_name']='Porkistan';
+		$geoloc['region_name']='Ostrobothnia';
+	}
+	elseif ($mod['id']==25199) {
+		$geoloc['country_code']='sharingan';
+	}
+//	elseif ($mod['id']==12050) {
+//		$geoloc['country_code']='z';
+//	}
+	elseif ($mod['id']==26) {
+        $geoloc['country_code']='ameritoucan';
+    }
+	elseif ($mod['id']==24993) {
+		$geoloc['country_code']='liam';
+	}
+	elseif ($mod['id']==11537) {
+		$geoloc['country_code']='milan';
+	}
+	if(!$skip_proxy){
+		$proxycheck=checkProxy($ip);
+		$proxy=($proxycheck) ? (in_array($ip,$config['ip_whitelist'],true) ? 'whitelisted' : 'true') : 'false';
+		$geoloc['proxy']=$proxy;
+	}
+	$geoloc['user_agent']=$_SERVER['HTTP_USER_AGENT'];
+	$geoloc['region_name']=$geoloc['region_name']!='-'?$geoloc['region_name']:'';
+	$geoloc['city_name']=$geoloc['city_name']!='-'?$geoloc['city_name']:'';
+	return $geoloc;
+}
+
+function hewatify($thread) {
+ 	global $board;
+ 	$hewat = 17;
+ 	$birthday = 'happy birthday hewat';
+ 	if (!isset($thread)) {
+ 		$query = prepare(sprintf("SELECT `id` FROM ``posts_%s`` WHERE `user` = :user ORDER BY `id` DESC LIMIT 1", $board['uri']));
+ 		$query->bindValue(':user', $hewat, PDO::PARAM_INT);
+ 		$query->execute() or error(db_error());
+ 		if (($id = $query->fetchColumn()) === false) {
+ 			return $birthday;
+ 		}
+ 		return '>>'.$id."\n".$birthday;
+ 	}
+ 	$query = prepare(sprintf("SELECT `id` FROM ``posts_%s`` WHERE (`thread` = :thread AND `user` = :user) OR (`id` = :thread AND `thread` IS NULL AND `user` = :user) ORDER BY `id` DESC LIMIT 1", $board['uri']));
+ 	$query->bindValue(':thread', $thread, PDO::PARAM_INT);
+ 	$query->bindValue(':user', $hewat, PDO::PARAM_INT);
+ 	$query->execute() or error(db_error());
+ 	if (($id = $query->fetchColumn()) === false) {
+ 		$query = prepare(sprintf("SELECT `id` FROM ``posts_%s`` WHERE `user` = :user ORDER BY `id` DESC LIMIT 1", $board['uri']));
+ 		$query->bindValue(':user', $hewat, PDO::PARAM_INT);
+ 		$query->execute() or error(db_error());
+ 		if (($id = $query->fetchColumn()) === false) {
+ 			return $birthday;
+ 		}
+ 	}
+ 	return '>>'.$id."\n".$birthday;
 }
